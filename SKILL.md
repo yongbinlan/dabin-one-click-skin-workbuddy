@@ -354,3 +354,44 @@ PowerShell 5.1 把**无 BOM** 的 `.ps1` 按 ANSI/GBK 解析，里面任何非 A
 
 想从**参考图**做一套全新主题（而不是改现有配色），走 `codedrobe-theme` skill 的
 `references/reference-image.md` + `dom-snapshot.md` 流程。
+
+---
+
+## 11. 分发：公开仓库
+
+已经发布到 GitHub，别人 `clone` 下来就能用：
+
+```
+https://github.com/yongbinlan/dabin-one-click-skin-workbuddy
+```
+
+仓库内容 = 本 skill 的 `SKILL.md` + `scripts/` + `template/` + `docs/`（展示图）。
+本地工作副本在 `E:\WorkBuddy\dabin-one-click-skin-workbuddy`（git 已连远端）。
+
+改完本 skill 之后要重新发布，把这几项同步过去再推：
+
+| 仓库路径 | 来自 |
+|---|---|
+| `SKILL.md` | 本 skill 根目录 |
+| `scripts/init.mjs` | 本 skill `scripts/` |
+| `template/**` | 本 skill `template/`（含 `template/docs/picker*.png`） |
+| `docs/skin-*.jpg` | 展示图（**必须先脱敏**） |
+
+### 两条发布期硬约束
+
+**① 展示图必须脱敏 —— 仓库是 PUBLIC。**
+
+这些是全屏截图，**左侧会话列表就是私人项目名，中间正文里有私有业务流程与本机绝对路径**。
+实测只遮侧栏是不够的：正文区才写着真正的内容级信息。
+脱敏流程与复核脚本走 `publishable-screenshot` skill（含「量边界 → 羽化 → 扫一遍确认」闭环）。
+
+**② `.gitattributes` 必须是 `* -text`。**
+
+这个仓库里编码与行尾是**产物正确性**的一部分：
+`.cmd` 必须 GBK 无 BOM + CRLF，写成裸 LF 会双击报一串「不是内部或外部命令」；
+`.ps1` / `.vbs` 必须纯 ASCII。所以关掉 git 的一切行尾转换，让文件按字节进出 ——
+否则在 `autocrlf=true` 的机器上 clone，CRLF 会被换成 LF，`.cmd` 当场失效。
+
+> 推之前做一次**字节级回环验证**：`git checkout-index` 到临时目录，
+> 与源文件逐个比 sha256，并确认 `.cmd` 仍是 GBK + 无 BOM + 零裸 LF。
+> 44/44 一致才算过 —— 光看 `git status` 干净说明不了字节没问题。
