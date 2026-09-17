@@ -1,0 +1,482 @@
+/* ============================================================
+   夜街 · 白吊带 — WorkBuddy 主题（CodeDrobe 规范化版）
+   本文件由 tools/build-theme.mjs 自动生成，请勿手工编辑。
+   源：themes/night-street/assets/legacy-skin-workbuddy.css
+   重新生成：node tools/build-theme.mjs themes/night-street
+   ============================================================ */
+/* HEIGE_WORKBUDDY_SKIN:night-street */
+/* ---------------------------------------------------------------
+   夜街 · 白吊带 | WorkBuddy(腾讯 CodeBuddy 桌面端) 主题
+   由 heige-codex-skin-studio buildWorkBuddySkinCss 生成
+   设计令牌三层: --cb-* 语义层 / --cb-vscode-* 桥接层 / --wb-* 结构层
+   5.5 独立: .cr-theme 的 --cr-* 设计系统
+   --------------------------------------------------------------- */
+/* ===== 1. 全局令牌根（必须同时写 :root 和 body，body 会覆盖继承值） ===== */
+html.codedrobe-host-workbuddy, html.codedrobe-host-workbuddy body {
+  color-scheme: dark !important;
+  --heige-accent: #e0b45c;
+  --heige-secondary: #6b8fa8;
+  --heige-surface: #12141d;
+  --heige-text: #f1e9dc;
+
+  /* 派生变量（其余 color-mix 都引用它们） */
+  --heige-on-accent: var(--heige-surface);
+  --heige-veil:      color-mix(in srgb, var(--heige-surface) 88%, transparent);
+  --heige-veil-soft: color-mix(in srgb, var(--heige-surface) 70%, transparent);
+  --heige-solid:     var(--heige-surface);
+  --heige-line:      color-mix(in srgb, var(--heige-accent) 32%, transparent);
+  --heige-line-soft: color-mix(in srgb, var(--heige-accent) 18%, transparent);
+}
+
+/* ===== 2. VS Code 桥接层 --cb-vscode-* ===== */
+html.codedrobe-host-workbuddy, html.codedrobe-host-workbuddy body {
+  --cb-vscode-editor-background: color-mix(in srgb, var(--heige-surface) 94%, transparent);
+  --cb-vscode-sideBar-background: color-mix(in srgb, var(--heige-surface) 88%, transparent);
+  --cb-vscode-titleBar-activeBackground: color-mix(in srgb, var(--heige-surface) 94%, transparent);
+  --cb-vscode-titleBar-inactiveBackground: color-mix(in srgb, var(--heige-surface) 90%, transparent);
+  --cb-vscode-editor-foreground: var(--heige-text);
+  --cb-vscode-foreground: var(--heige-text);
+  --cb-vscode-titleBar-activeForeground: var(--heige-text);
+  --cb-vscode-titleBar-inactiveForeground: color-mix(in srgb, var(--heige-text) 74%, transparent);
+  --cb-vscode-descriptionForeground: color-mix(in srgb, var(--heige-text) 72%, transparent);
+  --cb-vscode-button-background: var(--heige-accent);
+  --cb-vscode-button-foreground: var(--heige-on-accent);
+  --cb-vscode-button-hoverBackground: color-mix(in srgb, var(--heige-accent) 88%, var(--heige-surface));
+  --cb-vscode-button-secondaryBackground: color-mix(in srgb, var(--heige-surface) 88%, transparent);
+  --cb-vscode-button-secondaryForeground: var(--heige-text);
+  --cb-vscode-button-secondaryHoverBackground: color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --cb-vscode-input-background: color-mix(in srgb, var(--heige-surface) 84%, transparent);
+  --cb-vscode-dropdown-background: var(--heige-solid);
+  --cb-vscode-panel-border: var(--heige-line);
+  --cb-vscode-widget-border: var(--heige-line);
+  --cb-vscode-widget-shadow: 0 10px 28px color-mix(in srgb, var(--heige-accent) 14%, transparent);
+  --cb-vscode-menu-foreground: var(--heige-text);
+  --cb-vscode-menu-border: var(--heige-line);
+  --cb-vscode-menu-separatorBackground: var(--heige-line-soft);
+  --cb-vscode-list-hoverBackground: color-mix(in srgb, var(--heige-accent) 14%, transparent);
+  --cb-vscode-list-activeSelectionForeground: var(--heige-text);
+  --cb-vscode-list-inactiveForeground: color-mix(in srgb, var(--heige-text) 70%, transparent);
+  --cb-vscode-list-inactiveSelectionBackground: color-mix(in srgb, var(--heige-accent) 22%, transparent);
+  --cb-vscode-quickInputList-focusBackground: color-mix(in srgb, var(--heige-accent) 22%, transparent);
+  --cb-vscode-toolbar-hoverBackground: color-mix(in srgb, var(--heige-accent) 14%, transparent);
+  --cb-vscode-scrollbarSlider-background: color-mix(in srgb, var(--heige-accent) 32%, transparent);
+}
+
+/* ===== 3. 语义层 --cb-* ===== */
+html.codedrobe-host-workbuddy, html.codedrobe-host-workbuddy body {
+  /* 文字/图标 */
+  --cb-text-primary: var(--heige-text);
+  --cb-text-primary-strong: var(--heige-text);
+  --cb-text-solid: var(--heige-text);
+  --cb-text-secondary: color-mix(in srgb, var(--heige-text) 74%, transparent);
+  --cb-text-secondary-strong: color-mix(in srgb, var(--heige-text) 74%, transparent);
+  --cb-text-color-secondary: color-mix(in srgb, var(--heige-text) 74%, transparent);
+  --cb-text-tertiary: color-mix(in srgb, var(--heige-text) 70%, transparent);
+  --cb-text-tertiary-strong: color-mix(in srgb, var(--heige-text) 70%, transparent);
+  --cb-text-quaternary: color-mix(in srgb, var(--heige-text) 62%, transparent);
+  --cb-text-muted: color-mix(in srgb, var(--heige-text) 62%, transparent);
+  --cb-text-desc: color-mix(in srgb, var(--heige-text) 72%, transparent);
+  --cb-text-placeholder: color-mix(in srgb, var(--heige-text) 64%, transparent);
+  --cb-text-disabled: color-mix(in srgb, var(--heige-text) 48%, transparent);
+  --cb-text-link: var(--heige-accent);
+  --cb-text-link-hover: color-mix(in srgb, var(--heige-accent) 88%, var(--heige-surface));
+  --cb-text-highlight: var(--heige-accent);
+  --cb-link-foreground: var(--heige-accent);
+  --cb-icon-foreground: color-mix(in srgb, var(--heige-text) 78%, transparent);
+  --cb-icon-button-color: color-mix(in srgb, var(--heige-text) 78%, transparent);
+  --cb-icon-button-hover-background: color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --cb-sidebar-text: var(--heige-text);
+  --cb-sidebar-text-secondary: color-mix(in srgb, var(--heige-text) 74%, transparent);
+  --cb-sidebar-text-muted: color-mix(in srgb, var(--heige-text) 62%, transparent);
+
+  /* 面板/卡片 */
+  --cb-bg-primary: transparent;
+  --cb-bg-primary-default: transparent;
+  --cb-bg-primary-hover: color-mix(in srgb, var(--heige-accent) 12%, transparent);
+  --cb-bg-primary-active: color-mix(in srgb, var(--heige-accent) 18%, transparent);
+  --cb-bg-secondary: var(--heige-veil-soft);
+  --cb-bg-tertiary: var(--heige-veil-soft);
+  --cb-bg-surface: var(--heige-veil);
+  --cb-bg-surface-hover: color-mix(in srgb, var(--heige-accent) 14%, transparent);
+  --cb-bg-surface-active: color-mix(in srgb, var(--heige-accent) 22%, transparent);
+  --cb-bg-card: var(--heige-veil);
+  --cb-bg-elevated: var(--heige-solid);
+  --cb-bg-overlay: var(--heige-solid);
+  --cb-bg-color-container: var(--heige-veil);
+  --cb-card-background: var(--heige-veil);
+  --cb-hover-card-bg-color: color-mix(in srgb, var(--heige-accent) 14%, transparent);
+  --cb-panel-bg-primary: var(--heige-solid);
+  --cb-panel-bg-secondary: var(--heige-veil-soft);
+  --cb-overlay-background: var(--heige-solid);
+  --cb-hover-bg: color-mix(in srgb, var(--heige-accent) 12%, transparent);
+  --cb-hover-bg-fc: color-mix(in srgb, var(--heige-accent) 16%, transparent);
+
+  /* 侧栏 */
+  --cb-sidebar-background: transparent;
+  --cb-sidebar-bg: transparent;
+  --cb-sidebar-surface: color-mix(in srgb, var(--heige-surface) 60%, transparent);
+  --cb-sidebar-surface-hover: color-mix(in srgb, var(--heige-accent) 14%, transparent);
+  --cb-sidebar-item-hover-background: color-mix(in srgb, var(--heige-accent) 14%, transparent);
+  --cb-sidebar-active: color-mix(in srgb, var(--heige-accent) 24%, transparent);
+  --cb-sidebar-search-bg: color-mix(in srgb, var(--heige-surface) 72%, transparent);
+
+  /* 列表 */
+  --cb-list-item-bg: transparent;
+  --cb-list-item-hover-bg: color-mix(in srgb, var(--heige-accent) 14%, transparent);
+  --cb-list-item-active: color-mix(in srgb, var(--heige-accent) 22%, transparent);
+  --cb-list-item-selected-bg: color-mix(in srgb, var(--heige-accent) 22%, transparent);
+  --cb-list-item-foreground: var(--heige-text);
+  --cb-list-item-selected-foreground: var(--heige-text);
+  --cb-list-activeSelectionBackground: color-mix(in srgb, var(--heige-accent) 22%, transparent);
+  --cb-list-focusBackground: color-mix(in srgb, var(--heige-accent) 16%, transparent);
+
+  /* 浮层：一律实底（可读性优先，半透明只留给对话区） */
+  --cb-popover-background: var(--heige-solid);
+  --cb-popover-bg: var(--heige-solid);
+  --cb-popover-bg-fc: var(--heige-solid);
+  --cb-popover-bg-color: var(--heige-solid);
+  --cb-popover-bg-color-fc: var(--heige-solid);
+  --cb-popover-active-background: color-mix(in srgb, var(--heige-accent) 20%, transparent);
+  --cb-popover-border: var(--heige-line);
+  --cb-popover-divider: var(--heige-line-soft);
+  --cb-popover-secondary: color-mix(in srgb, var(--heige-text) 70%, transparent);
+  --cb-dialog-bg: var(--heige-solid);
+  --cb-dialog-content-bg: var(--heige-solid);
+  --cb-dialog-title-color: var(--heige-text);
+  --cb-dialog-hint-color: color-mix(in srgb, var(--heige-text) 64%, transparent);
+  --cb-dialog-close-color: color-mix(in srgb, var(--heige-text) 70%, transparent);
+  --cb-dialog-close-hover-bg: color-mix(in srgb, var(--heige-accent) 18%, transparent);
+  --cb-dialog-btn-primary-bg: var(--heige-accent);
+  --cb-dialog-btn-primary-text: var(--heige-on-accent);
+  --cb-dialog-btn-secondary-bg: color-mix(in srgb, var(--heige-surface) 88%, transparent);
+  --cb-dialog-btn-secondary-text: var(--heige-text);
+  --cb-dialog-btn-secondary-hover-bg: color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --cb-tooltip-bg: color-mix(in srgb, var(--heige-text) 90%, var(--heige-surface));
+  --cb-tooltip-text-color: var(--heige-surface);
+  --cb-tooltip-arrow-color: color-mix(in srgb, var(--heige-text) 90%, var(--heige-surface));
+
+  /* 按钮/开关/标签/Tab */
+  --cb-accent: var(--heige-accent);
+  --cb-button-primary: var(--heige-accent);
+  --cb-button-primary-foreground: var(--heige-on-accent);
+  --cb-button-secondary-background: color-mix(in srgb, var(--heige-surface) 88%, transparent);
+  --cb-button-secondary-foreground: var(--heige-text);
+  --cb-button-secondary-hover-background: color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --cb-button-foreground: var(--heige-text);
+  --cb-button-ghost-hover-background: color-mix(in srgb, var(--heige-accent) 14%, transparent);
+  --cb-button-grey-bg: color-mix(in srgb, var(--heige-surface) 80%, transparent);
+  --cb-button-grey-fg: var(--heige-text);
+  --cb-button-dark-background: var(--heige-accent);
+  --cb-button-dark-foreground: var(--heige-on-accent);
+  --cb-button-dark-hover-background: color-mix(in srgb, var(--heige-accent) 88%, var(--heige-surface));
+  --cb-switch-bg: color-mix(in srgb, var(--heige-text) 24%, transparent);
+  --cb-switch-active-bg: var(--heige-accent);
+  --cb-tag-background: color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --cb-tag-skill-background: color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --cb-tag-skill-background-hover: color-mix(in srgb, var(--heige-accent) 24%, transparent);
+  --cb-tag-selected-background: color-mix(in srgb, var(--heige-accent) 26%, transparent);
+  --cb-tag-selected-text: var(--heige-text);
+  --cb-tab-background: transparent;
+  --cb-tab-foreground: color-mix(in srgb, var(--heige-text) 70%, transparent);
+  --cb-tab-active-background: color-mix(in srgb, var(--heige-accent) 18%, transparent);
+  --cb-tab-active-foreground: var(--heige-text);
+  --cb-tab-active-border: var(--heige-accent);
+  --cb-tab-border: var(--heige-line-soft);
+  --cb-tab-header-border: var(--heige-line-soft);
+  --cb-tab-hover-background: color-mix(in srgb, var(--heige-accent) 12%, transparent);
+
+  /* 输入 */
+  --cb-input-background: color-mix(in srgb, var(--heige-surface) 84%, transparent);
+  --cb-input-foreground: var(--heige-text);
+  --cb-input-placeholder: color-mix(in srgb, var(--heige-text) 48%, transparent);
+  --cb-input-border-color: var(--heige-line-soft);
+  --cb-input-focus-border-color: var(--heige-accent);
+  --cb-input-active-border: var(--heige-accent);
+  --cb-input-button-foreground: var(--heige-text);
+  --cb-input-button-background: color-mix(in srgb, var(--heige-accent) 16%, transparent);
+
+  /* 描边/滚动条/阴影 */
+  --cb-border: var(--heige-line);
+  --cb-border-color: var(--heige-line);
+  --cb-border-default: var(--heige-line);
+  --cb-border-subtle: var(--heige-line-soft);
+  --cb-border-secondary: var(--heige-line-soft);
+  --cb-border-strong: var(--heige-line);
+  --cb-border-bright: var(--heige-accent);
+  --cb-border-color-emphasis: var(--heige-accent);
+  --cb-panel-border-color: var(--heige-line);
+  --cb-scrollbar-thumb: color-mix(in srgb, var(--heige-accent) 32%, transparent);
+  --cb-scrollbar-thumb-hover: color-mix(in srgb, var(--heige-accent) 42%, transparent);
+  --cb-shadow: 0 10px 28px color-mix(in srgb, var(--heige-accent) 12%, transparent);
+  --cb-shadow-lg: 0 16px 40px color-mix(in srgb, var(--heige-accent) 16%, transparent);
+}
+
+/* ===== 4. 结构层 --wb-*（只接管结构色，不动品牌色/状态色） ===== */
+html.codedrobe-host-workbuddy, html.codedrobe-host-workbuddy body {
+  --wb-bg-app: transparent;
+  --wb-bg-primary: transparent;
+  --wb-bg-content: transparent;
+  --wb-bg-secondary: var(--heige-veil-soft);
+  --wb-bg-tertiary: var(--heige-veil-soft);
+  --wb-bg-inset-strong: var(--heige-veil-soft);
+  --wb-bg-card: var(--heige-veil);
+  --wb-bg-card-hover: color-mix(in srgb, var(--heige-accent) 14%, var(--heige-surface));
+  --wb-bg-card-strong: var(--heige-solid);
+  --wb-bg-elevated: var(--heige-solid);
+  --wb-bg-modal: var(--heige-solid);
+  --wb-bg-popover: var(--heige-solid);
+  --wb-bg-popover-picker: var(--heige-solid);
+  --wb-bg-scrim-light: color-mix(in srgb, var(--heige-surface) 80%, transparent);
+  --wb-bg-hover: color-mix(in srgb, var(--heige-accent) 14%, transparent);
+  --wb-bg-hover-light: color-mix(in srgb, var(--heige-accent) 10%, transparent);
+  --wb-bg-active: color-mix(in srgb, var(--heige-accent) 22%, transparent);
+  --wb-bg-active-hover: color-mix(in srgb, var(--heige-accent) 26%, transparent);
+  --wb-bg-pill-hover: color-mix(in srgb, var(--heige-accent) 12%, transparent);
+  --wb-bg-tab-active: color-mix(in srgb, var(--heige-accent) 18%, transparent);
+  --wb-bg-item-selected: color-mix(in srgb, var(--heige-accent) 22%, transparent);
+  --wb-bg-row-selected: color-mix(in srgb, var(--heige-accent) 22%, transparent);
+  --wb-bg-surface-overlay-soft: color-mix(in srgb, var(--heige-accent) 8%, transparent);
+  --wb-bg-surface-overlay-strong: color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --wb-bg-input-inset: transparent;
+  --wb-bg-input-slot-gradient: linear-gradient(180deg, color-mix(in srgb, var(--heige-surface) 72%, transparent) 0%, color-mix(in srgb, var(--heige-surface) 84%, transparent) 100%);
+  --wb-bg-inverse: var(--heige-text);
+  --wb-text-inverse: var(--heige-surface);
+  --wb-text-on-inverse: var(--heige-surface);
+  --wb-text-on-primary: var(--heige-on-accent);
+  --wb-text-primary: var(--heige-text);
+  --wb-text-strong: var(--heige-text);
+  --wb-text-secondary: color-mix(in srgb, var(--heige-text) 74%, transparent);
+  --wb-text-medium: color-mix(in srgb, var(--heige-text) 74%, transparent);
+  --wb-text-tertiary: color-mix(in srgb, var(--heige-text) 70%, transparent);
+  --wb-text-author: color-mix(in srgb, var(--heige-text) 70%, transparent);
+  --wb-text-weak: color-mix(in srgb, var(--heige-text) 64%, transparent);
+  --wb-text-muted: color-mix(in srgb, var(--heige-text) 58%, transparent);
+  --wb-text-faded: color-mix(in srgb, var(--heige-text) 58%, transparent);
+  --wb-text-placeholder-soft: color-mix(in srgb, var(--heige-text) 56%, transparent);
+  --wb-text-version-badge: color-mix(in srgb, var(--heige-text) 46%, transparent);
+  --wb-text-disable: color-mix(in srgb, var(--heige-text) 44%, transparent);
+  --wb-text-link: var(--heige-accent);
+  --wb-text-link-default: var(--heige-accent);
+  --wb-text-action: var(--heige-accent);
+  --wb-border: var(--heige-line);
+  --wb-border-default: var(--heige-line);
+  --wb-border-secondary: var(--heige-line-soft);
+  --wb-border-light-alt: var(--heige-line-soft);
+  --wb-border-weak: var(--heige-line-soft);
+  --wb-border-faint: var(--heige-line-soft);
+  --wb-border-subtle: var(--heige-line-soft);
+  --wb-border-subtle-soft: var(--heige-line-soft);
+  --wb-border-mask: var(--heige-line);
+  --wb-border-card: var(--heige-line-soft);
+  --wb-border-card-static: var(--heige-line-soft);
+  --wb-border-control: var(--heige-line);
+  --wb-border-input: var(--heige-line-soft);
+  --wb-border-popover: var(--heige-line);
+  --wb-border-tooltip: var(--heige-line);
+  --wb-border-strong: var(--heige-line);
+  --wb-border-popover-strong: var(--heige-line);
+  --wb-border-hover: var(--heige-accent);
+  --wb-border-selected: var(--heige-accent);
+  --wb-border-focus: var(--heige-accent);
+  --wb-border-action: var(--heige-accent);
+  --wb-border-drag-indicator: var(--heige-accent);
+  --wb-scrollbar-thumb: color-mix(in srgb, var(--heige-accent) 32%, transparent);
+  --wb-scrollbar-thumb-bg: color-mix(in srgb, var(--heige-accent) 32%, transparent);
+  --wb-scrollbar-thumb-hover: color-mix(in srgb, var(--heige-accent) 42%, transparent);
+  --wb-shadow-card: 0 8px 20px color-mix(in srgb, var(--heige-accent) 12%, transparent);
+  --wb-shadow-card-hover: 0 14px 30px color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --wb-shadow-card-soft: 0 6px 16px color-mix(in srgb, var(--heige-accent) 10%, transparent);
+  --wb-shadow-dialog: 0 20px 50px color-mix(in srgb, var(--heige-accent) 18%, transparent);
+  --wb-shadow-dialog-md: 0 16px 40px color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --wb-shadow-dropdown: 0 14px 34px color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --wb-shadow-popover: 0 14px 34px color-mix(in srgb, var(--heige-accent) 16%, transparent);
+  --wb-shadow-sm: 0 2px 8px color-mix(in srgb, var(--heige-accent) 10%, transparent);
+  --wb-shadow-md: 0 8px 22px color-mix(in srgb, var(--heige-accent) 12%, transparent);
+  --wb-shadow-lg: 0 16px 40px color-mix(in srgb, var(--heige-accent) 16%, transparent);
+
+  /* 侧栏结构 */
+  --wb-sidebar-bg: transparent;
+  --wb-sidebar-border: var(--heige-line);
+  --wb-sidebar-mask-end: color-mix(in srgb, var(--heige-surface) 90%, transparent);
+  /* 主区域画布 */
+  --wb-main-area-background: transparent;
+  --wb-main-area-border-color: var(--heige-line);
+  --wb-main-area-box-shadow: 0 12px 24px -8px color-mix(in srgb, var(--heige-accent) 10%, transparent), 0 2px 4px -4px color-mix(in srgb, var(--heige-accent) 10%, transparent);
+}
+
+/* ===== 5. 5.5 独立 cr-* 设计系统（在 .cr-theme 重新声明，需在稳定主题根桥接） ===== */
+html.codedrobe-host-workbuddy .cr-theme {
+  --cr-text-primary: var(--heige-text);
+  --cr-internal-text-primary: var(--heige-text);
+  --cr-text-secondary: color-mix(in srgb, var(--heige-text) 74%, transparent);
+  --cr-internal-text-secondary: color-mix(in srgb, var(--heige-text) 74%, transparent);
+  --cr-text-tertiary: color-mix(in srgb, var(--heige-text) 70%, transparent);
+  --cr-internal-text-tertiary: color-mix(in srgb, var(--heige-text) 70%, transparent);
+  --cr-user-bubble-bg: color-mix(in srgb, var(--heige-accent) 16%, var(--heige-surface));
+  --cr-internal-user-bubble-bg: color-mix(in srgb, var(--heige-accent) 16%, var(--heige-surface));
+  --cr-bg-code: color-mix(in srgb, var(--heige-accent) 10%, var(--heige-surface));
+  --cr-internal-bg-code: color-mix(in srgb, var(--heige-accent) 10%, var(--heige-surface));
+  --cr-bg-code-header: color-mix(in srgb, var(--heige-accent) 14%, var(--heige-surface));
+  --cr-internal-bg-code-header: color-mix(in srgb, var(--heige-accent) 14%, var(--heige-surface));
+  --cr-bg-code-inline: color-mix(in srgb, var(--heige-accent) 12%, transparent);
+  --cr-internal-bg-code-inline: color-mix(in srgb, var(--heige-accent) 12%, transparent);
+  --cr-border-default: var(--heige-line-soft);
+  --cr-internal-border-default: var(--heige-line-soft);
+  --cr-popover-bg: var(--heige-solid);
+  --cr-internal-popover-bg: var(--heige-solid);
+  --cr-scrollbar-thumb: color-mix(in srgb, var(--heige-accent) 32%, transparent);
+  --cr-internal-scrollbar-thumb: color-mix(in srgb, var(--heige-accent) 32%, transparent);
+}
+html.codedrobe-host-workbuddy .cr-input-box {
+  --cr-bg-primary: color-mix(in srgb, var(--heige-surface) 86%, transparent);
+  --cr-internal-bg-primary: color-mix(in srgb, var(--heige-surface) 86%, transparent);
+  --cr-bg-elevated: color-mix(in srgb, var(--heige-surface) 86%, transparent);
+  --cr-internal-bg-elevated: color-mix(in srgb, var(--heige-surface) 86%, transparent);
+}
+
+/* ===== 6. 主画布背景（hero 图真正接入处） ===== */
+html.codedrobe-host-workbuddy, html.codedrobe-host-workbuddy body {
+  background: transparent !important;
+  color: var(--heige-text) !important;
+}
+html.codedrobe-host-workbuddy #root {
+  color: var(--heige-text) !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--heige-surface) 94%, transparent) 0 20%, transparent 46%),
+    linear-gradient(180deg, transparent 0 42%, color-mix(in srgb, var(--heige-surface) 76%, transparent) 82% 100%),
+    var(--codedrobe-image-hero) right center / cover no-repeat !important;
+}
+html.codedrobe-host-workbuddy #root [data-view-id] { background: transparent !important; }
+
+/* ===== 7. 主区域结构透明化（让 hero 透出） ===== */
+html.codedrobe-host-workbuddy .teams-container, html.codedrobe-host-workbuddy .teams-content-wrapper, html.codedrobe-host-workbuddy .teams-main-content, html.codedrobe-host-workbuddy .main-content, html.codedrobe-host-workbuddy .chat-container, html.codedrobe-host-workbuddy .workbuddy-topbar, html.codedrobe-host-workbuddy .wb-home-page, html.codedrobe-host-workbuddy .wb-home-page__main-content, html.codedrobe-host-workbuddy .conversation-list-topbar, html.codedrobe-host-workbuddy .conversation-list-header, html.codedrobe-host-workbuddy .conversation-list-content, html.codedrobe-host-workbuddy .conversation-list-footer, html.codedrobe-host-workbuddy .conversation-shell, html.codedrobe-host-workbuddy .wb-home-route {
+  background: transparent !important;
+  backdrop-filter: none !important;
+}
+html.codedrobe-host-workbuddy .conversation-sidebar, html.codedrobe-host-workbuddy .conversation-list {
+  background: color-mix(in srgb, var(--heige-surface) 90%, transparent) !important;
+  border-right: 1px solid var(--heige-line) !important;
+  backdrop-filter: none !important;
+}
+
+/* ===== 8. 浮层实底名单（遮罩层不动，保持半透明黑纱） ===== */
+html.codedrobe-host-workbuddy .settings-modal, html.codedrobe-host-workbuddy .settings-modal__nav, html.codedrobe-host-workbuddy .user-menu-popover, html.codedrobe-host-workbuddy .account-panel, html.codedrobe-host-workbuddy .wb-modal, html.codedrobe-host-workbuddy .ec-modal-card, html.codedrobe-host-workbuddy .wb-drawer, html.codedrobe-host-workbuddy .wb-popover, html.codedrobe-host-workbuddy .wb-shadow-popover, html.codedrobe-host-workbuddy .wb-dropdown, html.codedrobe-host-workbuddy .wb-kb-dialog, html.codedrobe-host-workbuddy .wb-todo-menu, html.codedrobe-host-workbuddy .cb-dialog, html.codedrobe-host-workbuddy .cb-popover, html.codedrobe-host-workbuddy .cb-dropdown, html.codedrobe-host-workbuddy .cb-context-menu, html.codedrobe-host-workbuddy .cb-add-marketplace-modal, html.codedrobe-host-workbuddy .cb-plugin-detail-dropdown, html.codedrobe-host-workbuddy .context-menu, html.codedrobe-host-workbuddy .dropdown-menu, html.codedrobe-host-workbuddy .base-menu, html.codedrobe-host-workbuddy .memory-modal, html.codedrobe-host-workbuddy .connector-detail-modal, html.codedrobe-host-workbuddy .connector-auth-modal, html.codedrobe-host-workbuddy .connector-device-code-modal, html.codedrobe-host-workbuddy .bind-channel-modal, html.codedrobe-host-workbuddy .share-task-dialog, html.codedrobe-host-workbuddy .skill-scan-result-dialog, html.codedrobe-host-workbuddy .skill-card-menu, html.codedrobe-host-workbuddy .task-transfer-popover, html.codedrobe-host-workbuddy .task-list-popover, html.codedrobe-host-workbuddy .sidebar-next-overview-popover, html.codedrobe-host-workbuddy .my-files-context-menu, html.codedrobe-host-workbuddy .my-files-filter-menu, html.codedrobe-host-workbuddy .notification-ctx-menu, html.codedrobe-host-workbuddy .notification-action-menu, html.codedrobe-host-workbuddy .welcome-screen-menu, html.codedrobe-host-workbuddy .feedback-modal, html.codedrobe-host-workbuddy .published-apps-list__progress-dialog, html.codedrobe-host-workbuddy .custom-dropdown__menu, html.codedrobe-host-workbuddy .tip-sound-select__menu, html.codedrobe-host-workbuddy .wb-storage-confirm-popover, html.codedrobe-host-workbuddy .models-settings-panel__delete-dialog, html.codedrobe-host-workbuddy .collab-modal__container, html.codedrobe-host-workbuddy .mcp-modal, html.codedrobe-host-workbuddy .connector-center__popup-menu, html.codedrobe-host-workbuddy .agent-mail-detail-dialog, html.codedrobe-host-workbuddy .tdoc-import-menu, html.codedrobe-host-workbuddy .create-file-popover, html.codedrobe-host-workbuddy .netdrive-selector-modal, html.codedrobe-host-workbuddy .action-popover__menu, html.codedrobe-host-workbuddy .collaborator-avatar-stack-popover, html.codedrobe-host-workbuddy .compact-nav-dropdown, html.codedrobe-host-workbuddy .expert-prompt-modal, html.codedrobe-host-workbuddy .mcp-apps-panel__dropdown, html.codedrobe-host-workbuddy .dc-drawer, html.codedrobe-host-workbuddy .dc-launch-dialog, html.codedrobe-host-workbuddy .dc-confirm-dialog, html.codedrobe-host-workbuddy .skills-installed-dropdown, html.codedrobe-host-workbuddy .skillhub-sort-dropdown-menu, html.codedrobe-host-workbuddy .skill-detail-dropdown, html.codedrobe-host-workbuddy .skills-add-dropdown, html.codedrobe-host-workbuddy .skill-batch-update-modal, html.codedrobe-host-workbuddy .ima-file-selector__dialog, html.codedrobe-host-workbuddy .lexiang-picker-dialog, html.codedrobe-host-workbuddy .search-result-modal, html.codedrobe-host-workbuddy .doc-selector-modal, html.codedrobe-host-workbuddy .wb-cascader-popover, html.codedrobe-host-workbuddy .network-check-modal, html.codedrobe-host-workbuddy .connector-qr-modal, html.codedrobe-host-workbuddy .connector-token-config-modal, html.codedrobe-host-workbuddy .cfp-context-menu, html.codedrobe-host-workbuddy .cfp-blank-context-menu, html.codedrobe-host-workbuddy .cfp-preview-modal, html.codedrobe-host-workbuddy .cfp-preview-modal__dropdown, html.codedrobe-host-workbuddy .cfp-card-dropdown, html.codedrobe-host-workbuddy .cfp-type-dropdown__menu, html.codedrobe-host-workbuddy .cfp-upload-dropdown__menu, html.codedrobe-host-workbuddy .cfp-version-modal, html.codedrobe-host-workbuddy .cfp-folder-modal, html.codedrobe-host-workbuddy .upload-modal, html.codedrobe-host-workbuddy .upload-modal__context-menu, html.codedrobe-host-workbuddy .upload-modal__folder-dialog, html.codedrobe-host-workbuddy .preview-modal, html.codedrobe-host-workbuddy .folder-picker-modal, html.codedrobe-host-workbuddy .new-folder-modal, html.codedrobe-host-workbuddy .project-detail-view__source-menu, html.codedrobe-host-workbuddy .project-instruction-drawer, html.codedrobe-host-workbuddy .conversation-search-modal, html.codedrobe-host-workbuddy .conversation-context-menu, html.codedrobe-host-workbuddy .project-connectors-drawer {
+  background: var(--heige-solid) !important;
+  backdrop-filter: none !important;
+}
+html.codedrobe-host-workbuddy body.agent-ui-theme [class*="dialogContainer"] {
+  background: var(--heige-solid) !important;
+  backdrop-filter: none !important;
+}
+html.codedrobe-host-workbuddy body.agent-ui-theme .conversation-archive-dialog > * {
+  background: var(--heige-solid) !important;
+  backdrop-filter: none !important;
+}
+html.codedrobe-host-workbuddy [class$="__overlay"] > *, html.codedrobe-host-workbuddy [class*="__overlay "] > *, html.codedrobe-host-workbuddy [class$="-modal-overlay"] > *, html.codedrobe-host-workbuddy [class*="-modal-overlay "] > *, html.codedrobe-host-workbuddy [class$="__modal-overlay"] > *, html.codedrobe-host-workbuddy [class*="__modal-overlay "] > *, html.codedrobe-host-workbuddy [class$="-dialog-overlay"] > *, html.codedrobe-host-workbuddy [class*="-dialog-overlay "] > *, html.codedrobe-host-workbuddy [class$="__dialog-overlay"] > *, html.codedrobe-host-workbuddy [class*="__dialog-overlay "] > *, html.codedrobe-host-workbuddy [class$="-editor-overlay"] > *, html.codedrobe-host-workbuddy [class*="-editor-overlay "] > *, html.codedrobe-host-workbuddy [class$="__editor-overlay"] > *, html.codedrobe-host-workbuddy [class*="__editor-overlay "] > *, html.codedrobe-host-workbuddy [class$="-confirm-overlay"] > *, html.codedrobe-host-workbuddy [class*="-confirm-overlay "] > * {
+  background: var(--heige-solid) !important;
+  backdrop-filter: none !important;
+}
+
+/* ===== 9. 控件级颜色接管（部分颜色原生写死，不读令牌） ===== */
+html.codedrobe-host-workbuddy .wb-button--primary, html.codedrobe-host-workbuddy .wb-button--primary :is(span, svg) {
+  color: var(--heige-on-accent) !important;
+}
+html.codedrobe-host-workbuddy .conversation-list-tab-button, html.codedrobe-host-workbuddy .conversation-list-tab-button > span, html.codedrobe-host-workbuddy .collapsible-section-label, html.codedrobe-host-workbuddy .user-menu-trigger-name {
+  color: var(--heige-text) !important;
+}
+html.codedrobe-host-workbuddy .conversation-list-tab-button-sub, html.codedrobe-host-workbuddy .conversation-section-label-text, html.codedrobe-host-workbuddy .logo-workbuddy-title, html.codedrobe-host-workbuddy .conversation-list-version-badge {
+  color: color-mix(in srgb, var(--heige-text) 66%, transparent) !important;
+}
+html.codedrobe-host-workbuddy .conversation-list-tab-button.active {
+  background: color-mix(in srgb, var(--heige-accent) 26%, transparent) !important;
+}
+html.codedrobe-host-workbuddy .conversation-section-label {
+  background: color-mix(in srgb, var(--heige-accent) 12%, transparent) !important;
+}
+html.codedrobe-host-workbuddy [data-slate-editor="true"] { color: var(--heige-text) !important; }
+html.codedrobe-host-workbuddy .wb-home-composer__input-slot {
+  border-radius: 18px;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--heige-accent) 14%, transparent) !important;
+}
+html.codedrobe-host-workbuddy .wb-input-footer, html.codedrobe-host-workbuddy .wb-input-footer button, html.codedrobe-host-workbuddy .wb-input-footer span, html.codedrobe-host-workbuddy [data-cb-chat-input-toolbar-selector] span, html.codedrobe-host-workbuddy .cb-overview-section__title-label {
+  color: color-mix(in srgb, var(--heige-text) 80%, transparent) !important;
+}
+html.codedrobe-host-workbuddy .quick-actions__item { background: color-mix(in srgb, var(--heige-surface) 92%, transparent) !important; }
+html.codedrobe-host-workbuddy .quick-actions--fade-right::after { background-image: linear-gradient(270deg, color-mix(in srgb, var(--heige-surface) 96%, transparent) 50%, color-mix(in srgb, var(--heige-surface) 0%, transparent) 99.99%) !important; }
+html.codedrobe-host-workbuddy .quick-actions--fade-left::before { background-image: linear-gradient(90deg, color-mix(in srgb, var(--heige-surface) 96%, transparent) 50%, color-mix(in srgb, var(--heige-surface) 0%, transparent) 99.99%) !important; }
+
+/* ===== 10. 阅读增强（仅 data-heige-readability="on" 时给 AI 回复垫主题蒙版） ===== */
+html.codedrobe-host-workbuddy .cb-assistant-message > :not(:empty) {
+  box-sizing: border-box;
+  color: var(--heige-text) !important;
+  background: color-mix(in srgb, var(--heige-surface) 90%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--heige-accent) 18%, transparent) !important;
+  border-radius: 22px;
+  padding: 14px 24px 12px !important;
+  backdrop-filter: none !important;
+}
+html.codedrobe-host-workbuddy .cb-assistant-message .cb-markdown :is(pre, code, blockquote) {
+  background: color-mix(in srgb, var(--heige-accent) 10%, transparent) !important;
+  color: var(--heige-text) !important;
+}
+html.codedrobe-host-workbuddy .cb-assistant-message .cb-markdown, html.codedrobe-host-workbuddy .cb-assistant-message .cb-markdown :is(p, li, td, th, h1, h2, h3, h4, h5, h6) {
+  color: var(--heige-text) !important;
+}
+html.codedrobe-host-workbuddy .cb-assistant-message .cb-credit-usage-text, html.codedrobe-host-workbuddy .cb-assistant-message .cb-message-time-tip, html.codedrobe-host-workbuddy .cb-assistant-message button, html.codedrobe-host-workbuddy .cb-assistant-message button :is(svg, span) {
+  color: color-mix(in srgb, var(--heige-text) 72%, transparent) !important;
+}
+html.codedrobe-host-workbuddy .cr-agent__body:has(> .cr-agent__content:not(:empty)) {
+  box-sizing: border-box;
+  color: var(--heige-text) !important;
+  background: color-mix(in srgb, var(--heige-surface) 90%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--heige-accent) 18%, transparent) !important;
+  border-radius: 22px;
+  padding: 14px 24px 12px !important;
+  backdrop-filter: none !important;
+}
+html.codedrobe-host-workbuddy .cr-agent__body .cr-markdown :is(pre, code, blockquote) {
+  background: color-mix(in srgb, var(--heige-accent) 10%, transparent) !important;
+  color: var(--heige-text) !important;
+}
+html.codedrobe-host-workbuddy .avatar-container .name, html.codedrobe-host-workbuddy .cr-agent__name {
+  color: var(--heige-text) !important;
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--heige-surface) 92%, transparent),
+    0 0 18px color-mix(in srgb, var(--heige-surface) 74%, transparent);
+}
+html.codedrobe-host-workbuddy .wb-home-header__title {
+  color: var(--heige-text) !important;
+  text-shadow:
+    0 0 10px color-mix(in srgb, var(--heige-surface) 96%, transparent),
+    0 0 22px color-mix(in srgb, var(--heige-surface) 88%, transparent),
+    0 2px 30px color-mix(in srgb, var(--heige-surface) 76%, transparent);
+}
+
+/* ===== 11. Logo 替换（如提供 logoDataUrl） ===== */
+html.codedrobe-host-workbuddy .conversation-list-logo {
+  /* logo 未提供 */
+  height: 44px !important;
+  margin-top: 2px;
+}
+html.codedrobe-host-workbuddy .conversation-list-logo > * { visibility: hidden; }
+
+/* ===== CodeDrobe 适配层（--theme-* 别名 + 深色声明） ===== */
+html.codedrobe-host-workbuddy {
+  color-scheme: dark !important;
+  --theme-bg: var(--heige-surface);
+  --theme-surface: color-mix(in srgb, var(--heige-surface) 92%, transparent);
+  --theme-surface-strong: var(--heige-solid);
+  --theme-sidebar: color-mix(in srgb, var(--heige-surface) 90%, transparent);
+  --theme-text: var(--heige-text);
+  --theme-muted: color-mix(in srgb, var(--heige-text) 66%, transparent);
+  --theme-accent: var(--heige-accent);
+  --theme-accent-soft: color-mix(in srgb, var(--heige-accent) 15%, transparent);
+  --theme-border: var(--heige-line);
+  --theme-shadow: color-mix(in srgb, #000 40%, transparent);
+}
+
+/* ===== 阅读增强（默认常开，取代 legacy 的 data-heige-readability 门槛） ===== */
+html.codedrobe-host-workbuddy .cb-assistant-message > :not(:empty),
+html.codedrobe-host-workbuddy .cr-agent__body:has(> .cr-agent__content:not(:empty)) {
+  background: color-mix(in srgb, var(--heige-surface) 90%, transparent) !important;
+}

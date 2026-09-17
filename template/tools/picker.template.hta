@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>WorkBuddy Wallpaper Picker</title>
+<HTA:APPLICATION
+  ID="oWp"
+  APPLICATIONNAME="WorkBuddyWallpaperPicker"
+  BORDER="thin"
+  CAPTION="yes"
+  SHOWINTASKBAR="yes"
+  SINGLEINSTANCE="no"
+  SYSMENU="yes"
+  WINDOWSTATE="normal"
+  SCROLL="no"
+  CONTEXTMENU="no"
+  SELECTION="no"
+/>
+<!--
+  这个文件是「壁纸选择器」的模板，不是给人双击的产物。
+  真正的产物由 tools/build-wallpaper-picker.mjs 生成：launcher\壁纸选择器.hta
+
+  为什么不直接把这个文件当成品用：
+    它带中文，是 UTF-8；而 HTA 跑在 MSHTML 上，对文件编码的猜测很不确定，
+    猜错就是满屏乱码，而且在 GUI 里极难排查。生成器会把这里所有非 ASCII
+    字符转成 JScript 的 \uXXXX 转义，产出一个纯 ASCII 的 .hta，
+    于是「按哪种编码解析」这个问题从根上消失了。
+
+  因此本文件的书写规则（生成器会校验）：
+    1. 非 ASCII 字符可以随便写（生成器负责转义），但必须落在
+       JScript 字符串字面量或注释里，不能出现在 HTML 标签/CSS 里
+       —— 落在 HTML 里会被转义成 \uXXXX 字面文本显示出来。
+    2. 注释里禁止出现半角双引号 "，用「」代替。
+       生成器用它来校验每行引号是否成对：产物是纯 ASCII，
+       一行里的 " 数量必须是偶数，奇数就说明有字符串没闭合。
+    3. 这里写 JScript 时要按「最终产物」的样子写反斜杠：
+       正则 \s \d \. \/ 就写一个反斜杠，换行就写 \r\n。
+       （这一点很关键：早先把模板塞在 JS 模板字符串里，每个反斜杠都要写两遍，
+         漏一个就产出语法错误的产物，而且完全静默。改成独立模板文件后
+         这层双写陷阱就没了。）
+    4. 只写 ES5 语法。HTA 的引擎取决于本机 IE，箭头函数 / let / const /
+       模板字符串一律不认。生成器会校验。
+    5. 双下划线包起来的全大写标记是占位符，会被生成器替换成真实路径；
+       替换后不得残留（生成器会校验）。
+-->
+<style>
+  html, body { margin:0; padding:0; height:100%; }
+  body {
+    background:#12141d; color:#f1e9dc;
+    font-family:"Microsoft YaHei","Segoe UI",sans-serif;
+    font-size:13px;
+  }
+  .wrap { height:100%; display:block; }
+  .hdr { padding:16px 22px 13px; border-bottom:1px solid #2a2f3d; }
+  .ttl { font-size:16px; font-weight:bold; color:#e0b45c; letter-spacing:1px; }
+  .sub { font-size:12px; color:#8b93a3; margin-top:7px; height:16px; }
+  .sub .v { color:#f1e9dc; }
+  .sub .warn { color:#d9a441; }
+  .grid { padding:16px 22px 8px; height:346px; overflow-y:auto; overflow-x:hidden; }
+  .card {
+    display:inline-block; width:178px; padding:6px; margin:0 14px 14px 0;
+    border:1px solid #2a2f3d; background:#1a1e28;
+    cursor:pointer; vertical-align:top;
+  }
+  .card:hover { border-color:#4a5266; background:#202533; }
+  .card.on { border-color:#e0b45c; background:#242938; }
+  .card img { width:164px; height:92px; display:block; border:0; background:#0d0f14; }
+  .thumb-miss {
+    width:164px; height:92px; line-height:92px; text-align:center;
+    background:#0d0f14; color:#5a6274; font-size:11px;
+    overflow:hidden;
+  }
+  .nm { font-size:11px; color:#b9c0cf; margin-top:7px; height:15px; overflow:hidden; }
+  .cur { font-size:11px; color:#e0b45c; margin-top:2px; height:15px; }
+  .empty { color:#8b93a3; font-size:12px; padding:30px 4px; line-height:2; }
+  .bar { padding:13px 22px; border-top:1px solid #2a2f3d; }
+  .lb { font-size:12px; color:#8b93a3; margin-right:10px; }
+  .btn {
+    display:inline-block; padding:6px 15px; margin-right:8px;
+    border:1px solid #2a2f3d; background:#1a1e28; color:#f1e9dc;
+    font-size:12px; cursor:pointer;
+  }
+  .btn:hover { border-color:#4a5266; }
+  .btn.on { border-color:#e0b45c; color:#e0b45c; background:#242938; }
+  .btn.ghost { float:right; margin-right:0; margin-left:8px; color:#8b93a3; }
+  /* 主按钮：金色描边。「浏览文件夹…」是解决「选了图没反应」的那条新路径，
+     得让人一眼看见，不能和刷新/关闭同权重。 */
+  .btn.primary { border-color:#e0b45c; color:#e0b45c; }
+  .btn.primary:hover { background:#2a3040; }
+  /* 标题行里的小按钮（返回壁纸库）。放在 .sub 行是因为它属于"当前视图状态"，
+     不属于底部动作区。 */
+  .sub .mini {
+    display:inline-block; margin-left:10px; padding:2px 9px;
+    border:1px solid #4a5266; color:#f1e9dc; font-size:11px; cursor:pointer;
+  }
+  .sub .mini:hover { border-color:#e0b45c; color:#e0b45c; }
+  .browse-note { color:#d9a441; }
+  /* 浏览模式下的卡片状态字。绿色 = 壁纸库里已经有这张（点了不会重复占位），
+     金色 = 就是当前在用的那张。这是化解「以为图被删了」的关键提示，
+     所以给颜色，不能和普通说明文字同权重。 */
+  .cur.inlib { color:#5fb27a; }
+  .cur.onuse { color:#e0b45c; }
+  /* 结算文案会写到「其他 N 张原图没有被移动、也没有被删除」这个长度，
+     固定 18px 会被裁掉半句 —— 而恰恰是那半句最关键。 */
+  .st { margin-top:11px; font-size:12px; color:#8b93a3; min-height:18px; line-height:1.6; }
+  .st.ok { color:#5fb27a; }
+  .st.err { color:#d95c5c; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="ttl" id="ttl"></div>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="bar">
+    <span class="lb" id="lb"></span><span id="presets"></span>
+    <span id="actions"></span>
+  </div>
+  <div class="bar" style="border-top:0;padding-top:0;">
+    <div class="st" id="st"></div>
+  </div>
+</div>
+
+<script language="JScript">
+/* ---------------------------------------------------------------------------
+ * 路径解析 —— 全部在运行时完成，产物里不含任何绝对路径
+ *
+ * 为什么这么做：早先这几个值是 build 时注入的绝对路径，于是产物被绑死在
+ * 生成它的那台机器／那个目录上，换个位置就得重新生成。改成运行时推导后，
+ * 「壁纸选择器.hta」可以整体复制到任何地方直接用。
+ *
+ * 唯一推导不出来的是 node.exe 的位置 —— 那属于每台机器自己的事，
+ * 从 <root>\launcher\env.cmd 读（由 tools/write-env.mjs 探测后写入）。
+ * ------------------------------------------------------------------------- */
+function htaSelfPath() {
+  var u = String(document.location.href || document.URL || "");
+  u = u.replace(/^file:\/\//i, "");   // 去掉 file://
+  u = u.replace(/^\//, "");           // 去掉开头那个根斜杠
+  u = decodePct(u);                   // 中文 / 空格在 url 里是百分号编码
+  return u.replace(/\//g, "\\");
+}
+function parentDir(p) {
+  var i = String(p).lastIndexOf("\\");
+  return i > 0 ? String(p).slice(0, i) : "";
+}
+/* 从 env.cmd 里取一个变量值（行形如 set "SKIN_NODE=<node 的完整路径>"） */
+function readEnvCmd(key) {
+  var v = "";
+  try {
+    var f = fso();
+    var p = LAUNCHER_DIR + "\\env.cmd";
+    if (!f.FileExists(ntv(p))) return "";
+    var t = f.OpenTextFile(ntv(p), 1, false);
+    while (!t.AtEndOfStream) {
+      var line = String(t.ReadLine());
+      if (line.toLowerCase().indexOf(String(key).toLowerCase()) < 0) continue;
+      var eq = line.indexOf("=");
+      if (eq < 0) continue;
+      v = line.slice(eq + 1).replace(/"/g, "");
+      break;
+    }
+    t.Close();
+  } catch (e) { v = ""; }
+  return trim(v);
+}
+
+var LAUNCHER_DIR = parentDir(htaSelfPath());   // 本文件所在目录（launcher）
+var ROOT = parentDir(LAUNCHER_DIR);            // 再上一级：工程根
+
+var WIN = {
+  root:    ROOT,
+  lib:     ROOT + "\\wallpapers",
+  current: ROOT + "\\wallpapers\\current.json",
+  node:    readEnvCmd("SKIN_NODE"),
+  script:  ROOT + "\\tools\\set-wallpaper.mjs",
+  tmp:     ROOT + "\\logs",
+  log:     ROOT + "\\logs\\picker-selftest.txt",
+  flag:    ROOT + "\\logs\\picker-selftest.flag"
+};
+if (!WIN.node) WIN.node = "node";   // 读不到 env.cmd 就退回 PATH 里的 node
+
+var RUN_TXT = WIN.tmp + "/picker-run.txt";
+var RUN_BAT = WIN.tmp + "/picker-run.bat";
+
+var T = {
+  title: "WorkBuddy 壁纸选择器",
+  currentLabel: "当前壁纸：",
+  themeBuiltin: "（主题自带）",
+  presetLabel: "透出强度：",
+  strength: "透出强度",
+  using: "使用中",
+  missing: "文件不在了",
+  missingNote: "（记录的图片文件已不存在，界面会回落到主题自带壁纸）",
+  disabledNote: "（皮肤层已关闭）",
+  empty1: "壁纸库是空的。",
+  empty2: "点下面的「浏览文件夹…」挑一个装图片的文件夹，或把图片直接拖进本窗口。",
+  openLib: "打开壁纸库",
+  openLibTip: "在资源管理器里打开壁纸库目录（只是打开文件夹，不会自动换壁纸）。要加图请用「浏览文件夹…」，或把图片直接拖进本窗口。",
+  refresh: "刷新",
+  closeWin: "关闭",
+  switching: "正在切换，请稍候…",
+  ok: "已生效，界面应该马上就变了。",
+  noCdp: "已记录。WorkBuddy 现在没开着，下次启动时自动生效。",
+  selfFail: "已注入但自检没通过，详见 logs 目录下的日志。",
+  badArg: "参数有误，未做任何改动。",
+  failPrefix: "切换失败，退出码 ",
+  noResult: "命令没有返回结果（可能被安全策略拦下了）。",
+  noNode: "找不到 node 运行时，无法切换。运行时目录可能被移动过。",
+  noPreview: "无缩略图",
+  noPreviewTip: "系统自带的预览控件解不了这个格式（webp / avif）。不影响使用，点它一样能换上。",
+  light: "淡", medium: "中", strong: "浓",
+  presetName: { light: "淡", medium: "中", strong: "浓" },
+
+  // ---- 换外部图片（本轮新增）：把「选图」这件事从四步压成一步 ----
+  // 之前只有「打开壁纸库」一条路，而它只是打开文件夹 —— 用户在资源管理器里
+  // 选了一张图，界面当然毫无反应。这组文案专门把两条真路径说清楚。
+  pickFolder: "浏览文件夹…",
+  pickFolderTitle: "选一个装图片的文件夹：里面的图只列出来供你挑，点哪张才换哪张",
+  pickCanceled: "没有选择文件夹，未做任何改动。",
+  pickFail: "没能读到所选文件夹的路径，请在资源管理器里打开它再试。",
+  pickUnsupported: "这台机器上打不开文件夹选择框。请改用「打开壁纸库」，或把图片直接拖进本窗口。",
+  browsing: "正在浏览：",
+  browseReady: "已列出下面这些图 —— 它们只是预览，一张都还没进壁纸库。点哪张，才收哪张。",
+  /* 「这里只是预览」必须写在最显眼的地方。用户点「浏览文件夹…」之后，
+     界面上一下子多出几十张图，不给这句话，直觉就是「全都被加进来了」。
+     实际上一张都还没进壁纸库 —— 点哪张，才收哪张。 */
+  browseNote: "　下面列出的都只是预览，还没进壁纸库 —— 点哪张，才收哪张进去",
+  backToLib: "返回壁纸库",
+  browseOver1: "这个文件夹里的图片超过 ",
+  browseOver2: " 张，只显示了前 ",
+  browseOver3: " 张（同样只是预览，没有全部收进库）。",
+  browseEmpty1: "这个文件夹里没有支持的图片。",
+  browseEmpty2: "支持 jpg / jpeg / png / webp / gif / bmp / avif。换个文件夹试试。",
+  adding: "正在收进壁纸库并切换，请稍候…",
+  addedOk: "已收进壁纸库并生效，界面应该马上就变了。",
+  /* 收图完成后的结算文案（拼装见 settleText）。
+     为什么非要有这句：点完一张图之后，用户脑子里还记着刚才那个装满图的
+     目录。不把「只收了这一张 / 库里现有几张 / 原来那个目录几张没被动过」
+     说清楚，直觉就是「我的图被删了」。
+     这里**必须**报出「壁纸库现有几张」—— 壁纸库是用户一张张攒下来的收藏，
+     点完一张之后他要能确认「旧的那些还在，只是又多了一张」。 */
+  settle1: "只收进了这 1 张：",
+  settle2: "　壁纸库现有 ",
+  settle3: " 张（旧的一张都没动）；",
+  settle4: " 里的 ",
+  settle5: " 张原图也没有被移动、没有被删除。",
+  inLibBadge: "已在壁纸库",
+  onUseBadge: "已收进库 · 正在使用",
+  dropFail: "没认出拖进来的东西。请拖一张图片文件（jpg / png / webp / gif / bmp / avif）。",
+  dropHint: "（也可以把图片直接拖进本窗口）"
+};
+
+function fso() { return new ActiveXObject("Scripting.FileSystemObject"); }
+function shl() { return new ActiveXObject("WScript.Shell"); }
+function el(id) { return document.getElementById(id); }
+
+// 自己实现 trim，不依赖 String.prototype.trim —— HTA 的引擎版本取决于本机
+// 装的 IE，老引擎没这个方法，一调就整段脚本抛错。
+function trim(s) { return String(s).replace(/^\s+|\s+$/g, ""); }
+
+// 路径里的 / 换成 \，FSO 只认反斜杠
+function ntv(p) { return String(p).replace(/\//g, "\\"); }
+// 反斜杠换成 /，凑成 file:/// 开头的 URL
+function fileUrl(p) { return "file:///" + String(p).replace(/\\/g, "/"); }
+function quote(s) { return '"' + s + '"'; }
+
+function delIf(p) {
+  try { var f = fso(); if (f.FileExists(ntv(p))) f.DeleteFile(ntv(p)); } catch (e) { }
+}
+
+function readAll(p) {
+  try {
+    var t = fso().OpenTextFile(ntv(p), 1, false);
+    var s = t.ReadAll(); t.Close(); return String(s);
+  } catch (e) { return ""; }
+}
+
+/*
+ * 按 UTF-8 读文本。
+ * FSO 的 OpenTextFile 只支持 ASCII 和 UTF-16，没有 UTF-8 选项，而
+ * current.json 里会出现中文壁纸名。ADODB.Stream 能指定 utf-8，是这里唯一
+ * 可靠的读法。拿不到它时才退回 FSO —— 写入端已保证该文件是纯 ASCII，
+ * 所以退路同样正确。两条路都留着，是因为这个文件也可能被别的工具改写。
+ */
+function readTextUtf8(p) {
+  try {
+    var s = new ActiveXObject("ADODB.Stream");
+    s.Type = 2;
+    s.Charset = "utf-8";
+    s.Open();
+    s.LoadFromFile(ntv(p));
+    var t = s.ReadText(-1);
+    s.Close();
+    return String(t);
+  } catch (e) {
+    return readAll(p);
+  }
+}
+
+function writeAscii(p, s) {
+  var t = fso().CreateTextFile(ntv(p), true, false);
+  t.Write(s); t.Close();
+}
+
+/*
+ * 为什么先落一个临时 .bat，而不是把命令直接拼给 Run 的 /c 参数：
+ *   1) cmd 的 /c 引号剥离规则很反直觉，路径一带空格就容易拼错，而且错了是静默的；
+ *      写进 .bat 让 cmd 自己解析，就绕开了这层拼接问题。
+ *   2) .bat 里 %ERRORLEVEL% 是按行展开的，拿到的确实是上一条命令的退出码。
+ *      若把「node ... & echo %ERRORLEVEL%」写在同一行，展开发生在解析阶段，
+ *      报出来的永远是旧值 —— 这是经典坑，所以必须分两行。
+ * Run 的参数用 (cmd, 0, true)：
+ *   0    = 窗口完全隐藏。这条很重要，Exec 一定会拉起控制台窗口闪一下，
+ *          用户看到黑窗闪动会以为程序出错了。
+ *   true = 等它跑完再往下走，否则读不到结果。
+ */
+function runCmd(cmd) {
+  delIf(RUN_TXT);
+  try {
+    writeAscii(RUN_BAT,
+      "@echo off\r\n" +
+      cmd + " > \"" + ntv(RUN_TXT) + "\" 2>&1\r\n" +
+      "echo RC=%ERRORLEVEL% >> \"" + ntv(RUN_TXT) + "\"\r\n");
+  } catch (e0) { return -1; }
+  try { shl().Run("cmd.exe /c \"" + ntv(RUN_BAT) + "\"", 0, true); }
+  catch (e1) { return -1; }
+  var m = /RC=(\d+)/.exec(readAll(RUN_TXT));
+  return m ? parseInt(m[1], 10) : -1;
+}
+
+function setStatus(msg, kind) {
+  var e = el("st");
+  e.className = "st" + (kind === true ? " ok" : (kind === false ? " err" : ""));
+  e.innerHTML = "";
+  e.appendChild(document.createTextNode(String(msg)));
+}
+
+function span(cls, text) {
+  var s = document.createElement("span");
+  s.className = cls;
+  s.appendChild(document.createTextNode(String(text)));
+  return s;
+}
+
+var IMG_RE = /\.(jpg|jpeg|png|webp|gif|bmp|avif)$/i;
+
+/* 浏览模式：null = 看壁纸库；否则 = 看这个目录 */
+var browseDir = null;
+/* 单个目录最多列这么多张。图库动辄上千张，全渲染会把 HTA 卡死 —— */
+/* 超过就只显示前 N 张并明确告知，而不是假装"就这么几张"。 */
+var BROWSE_MAX = 60;
+
+/* 某个目录里所有支持的图片，按文件名排序 */
+function listImages(dir) {
+  var out = [];
+  try {
+    var f = fso();
+    if (!f.FolderExists(ntv(dir))) return out;
+    var e = new Enumerator(f.GetFolder(ntv(dir)).Files);
+    for (; !e.atEnd(); e.moveNext()) {
+      var it = e.item();
+      if (IMG_RE.test(it.Name)) out.push({ name: it.Name, path: it.Path });
+    }
+  } catch (err) { }
+  out.sort(function (a, b) { return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0); });
+  return out;
+}
+
+/* 壁纸库目录里所有图片 */
+function listWallpapers() { return listImages(WIN.lib); }
+
+/*
+ * 壁纸库的「文件名 → 字节数」索引，用来在浏览别的目录时判断
+ * 「这张是不是已经在库里了」。
+ * 为什么用名字 + 大小，而不是比对内容：真正权威的判断是内容比对
+ * （set-wallpaper.mjs 里的 sameBytes），但在界面里逐张读全量字节会把
+ * HTA 拖住。同名同大小对壁纸这种小文件来说基本就是同一张；万一碰上
+ * 「同名不同内容」，后果只是不显示标记 —— 落在保守的一侧，不会让用户
+ * 误以为已经收过了。
+ */
+function libIndex() {
+  var m = {};
+  try {
+    var f = fso();
+    if (!f.FolderExists(ntv(WIN.lib))) return m;
+    var e = new Enumerator(f.GetFolder(ntv(WIN.lib)).Files);
+    for (; !e.atEnd(); e.moveNext()) {
+      var it = e.item();
+      if (IMG_RE.test(it.Name)) m[String(it.Name)] = Number(it.Size);
+    }
+  } catch (err) { }
+  return m;
+}
+
+function fileSizeOf(p) {
+  try { return Number(fso().GetFile(ntv(p)).Size); } catch (e) { return -1; }
+}
+
+/*
+ * 收图完成后的结算文案。
+ * 用户点完一张图，界面留在原来的浏览视图里，而脑子里还记着刚才那个装满图的
+ * 目录。所以要把三件事说全：收的是哪一张、壁纸库里现在共几张（旧的一张没动）、
+ * 原来那个目录还有几张没被动过。少任何一件，直觉就是「我的图被删了」。
+ * 写成纯函数，自检里才能直接调它做断言。
+ */
+function settleText(p, srcDir, total, n) {
+  var base = String(p);
+  try {
+    var parts = String(p).replace(/\\/g, "/").split("/");
+    base = parts[parts.length - 1];
+  } catch (e0) { }
+  var s = T.settle1 + base + T.settle2 + n + T.settle3;
+  if (srcDir && total) s += srcDir + T.settle4 + total + T.settle5;
+  return s;
+}
+
+/*
+ * 把百分号序列按 UTF-8 解码。
+ * 不用 decodeURIComponent：拖拽拿到的文本有时已解码、有时没有，而这个函数
+ * 要同时容忍两种情况 —— 非 ASCII 字符原样保留，只有 %XX 才当字节解。
+ * 自己实现才能保证这个语义，顺便也不必赌 HTA 里内置函数的行为。
+ */
+function decodePct(s) {
+  if (s.indexOf("%") < 0) return s;
+  var bytes = [], i = 0;
+  while (i < s.length) {
+    if (s.charAt(i) === "%" && i + 3 <= s.length &&
+        /^[0-9a-fA-F]{2}$/.test(s.substr(i + 1, 2))) {
+      bytes.push(parseInt(s.substr(i + 1, 2), 16));
+      i += 3;
+      continue;
+    }
+    /* -1 是"这个字符没被编码"的标记，和真实字节区分开 */
+    bytes.push(-1);
+    bytes.push(s.charCodeAt(i));
+    i++;
+  }
+  var out = "", j = 0;
+  while (j < bytes.length) {
+    var b = bytes[j];
+    if (b === -1) { out += String.fromCharCode(bytes[j + 1]); j += 2; continue; }
+    if (b < 0x80) { out += String.fromCharCode(b); j++; continue; }
+    var need = 0, cp = 0;
+    if ((b & 0xE0) === 0xC0) { need = 1; cp = b & 0x1F; }
+    else if ((b & 0xF0) === 0xE0) { need = 2; cp = b & 0x0F; }
+    else if ((b & 0xF8) === 0xF0) { need = 3; cp = b & 0x07; }
+    else { out += String.fromCharCode(b); j++; continue; }
+    var ok = true, k;
+    for (k = 1; k <= need; k++) {
+      var nb = (j + k < bytes.length) ? bytes[j + k] : -9;
+      if (nb < 0x80 || nb > 0xBF) { ok = false; break; }
+      cp = (cp << 6) | (nb & 0x3F);
+    }
+    if (!ok) { out += String.fromCharCode(b); j++; continue; }
+    if (cp > 0xFFFF) {
+      cp -= 0x10000;
+      out += String.fromCharCode(0xD800 + (cp >> 10), 0xDC00 + (cp & 0x3FF));
+    } else {
+      out += String.fromCharCode(cp);
+    }
+    j += need + 1;
+  }
+  return out;
+}
+
+/*
+ * 拖进来的文本 → 本地路径。
+ * 资源管理器拖出来的是 file:///D:/... 形式，中文路径必然带百分号编码。
+ * 认不出来一律返回 null —— 让界面给出可读的原因，而不是默默什么都不做。
+ * 这正是本轮要修的毛病：以前失败得毫无声息，用户只会觉得"没用"。
+ */
+function fileUrlToPath(s) {
+  if (s === null || s === undefined) return null;
+  s = trim(s);
+  if (!s) return null;
+  if (s.length > 2 && s.charAt(0) === '"' && s.charAt(s.length - 1) === '"') {
+    s = s.substring(1, s.length - 1);
+  }
+  s = s.replace(/^file:\/{2,3}/i, "");
+  s = decodePct(s);
+  s = s.replace(/\//g, "\\");
+  s = s.replace(/^\\+/, "");
+  if (!/^[a-zA-Z]:\\/.test(s)) return null;
+  if (!IMG_RE.test(s)) return null;
+  try { if (!fso().FileExists(ntv(s))) return null; } catch (e) { return null; }
+  return s;
+}
+
+function extractDropPath(e) {
+  var dt = null;
+  try { dt = e.dataTransfer; } catch (e1) { dt = null; }
+  if (!dt) { try { dt = window.event.dataTransfer; } catch (e2) { dt = null; } }
+  if (!dt) return null;
+  var tries = ["Text", "URL", "text"];
+  for (var i = 0; i < tries.length; i++) {
+    var raw = null;
+    try { raw = dt.getData(tries[i]); } catch (e3) { raw = null; }
+    var p = fileUrlToPath(raw);
+    if (p) return p;
+  }
+  return null;
+}
+
+/*
+ * 挑一个文件夹来选图。
+ * 用系统自带的 BrowseForFolder，它返回的路径是 Unicode，中文目录不会乱码
+ * （不像走命令行传参还要过一遍代码页）。选完把整个目录的图画在网格里，
+ * 点哪张就换哪张 —— 比"打开文件夹→自己复制→回来刷新→再点卡片"少三步。
+ */
+function pickFolder() {
+  var fd = null;
+  try {
+    var sh = new ActiveXObject("Shell.Application");
+    fd = sh.BrowseForFolder(0, T.pickFolderTitle, 0, 0);
+  } catch (e) {
+    setStatus(T.pickUnsupported, false);
+    return;
+  }
+  /* 返回 null = 用户点了取消，这不是错误 */
+  if (!fd) { setStatus(T.pickCanceled); return; }
+  var p = null;
+  try { p = String(fd.Self.Path); } catch (e2) { p = null; }
+  if (!p) { setStatus(T.pickFail, false); return; }
+  browseDir = p;
+  /* 状态行不再重复「正在浏览：路径」（标题行已经给了这个信息）。
+     改成把「只是预览」再说一遍 —— 这个误解值得说三遍，
+     它正是用户以为「整个目录都被加进来了」的根源。 */
+  setStatus(T.browseReady);
+  render();
+}
+
+function backToLib() { browseDir = null; render(); }
+
+/*
+ * 把外部图片收进壁纸库并换上。
+ *
+ * 成功后【不再】跳回壁纸库视图 —— 这是本轮最重要的一处行为改动。
+ * 旧版跳回去，本意是「让新卡片出现在眼前」；实际效果是用户眼前的画面从
+ * 几十张图猛地变成两三张，而脑子里还记着刚才那个目录，直觉就是
+ * 「我的图被删了」。留在原地就好：那张图会自己带上「已收进库 · 正在使用」
+ * 的标记，其余图原样都在；想看壁纸库，点一下「返回壁纸库」即可。
+ */
+function addAndUse(p) {
+  if (nodeMissing()) { setStatus(T.noNode, false); return; }
+  /* 记下是在哪个目录里点的 —— 结算文案要报出「那里有几张原图没被动过」 */
+  var srcDir = browseDir;
+  var total = srcDir ? listImages(srcDir).length : 0;
+  setStatus(T.adding);
+  window.setTimeout(function () {
+    var rc = runCmd(quote(WIN.node) + " " + quote(WIN.script) + " add " + quote(ntv(p)));
+    afterRun(rc, function () {
+      return settleText(p, srcDir, total, listWallpapers().length);
+    });
+  }, 150);
+}
+
+/* 读 current.json。读不到或坏了都退回默认值，界面照样能用 */
+function readState() {
+  var st = { path: null, preset: "medium", enabled: true, missing: false };
+  try {
+    var txt = readTextUtf8(WIN.current);
+    var o = JSON.parse(txt);
+    st.enabled = !o.disabled;
+    if (o.preset) st.preset = o.preset;
+    if (!T.presetName[st.preset]) st.preset = "medium";
+    if (o.path) {
+      var norm = String(o.path).replace(/\\/g, "/");
+      var parts = norm.split("/");
+      st.path = parts[parts.length - 1];
+      st.missing = !fso().FileExists(String(o.path));
+    }
+  } catch (err) { }
+  return st;
+}
+
+function nodeMissing() {
+  try { return !fso().FileExists(ntv(WIN.node)); } catch (e) { return true; }
+}
+
+/*
+ * okMsg：成功文案可定制 —— 「收图进库并换上」和「切换已有壁纸」的提示不该一样。
+ * 也可以传函数：收图那条文案得现场数一遍壁纸库里有几张，传字符串算不出来。
+ */
+function afterRun(rc, okMsg) {
+  if (rc === 0) {
+    var m = (typeof okMsg === "function") ? okMsg() : (okMsg || T.ok);
+    setStatus(m, true);
+  }
+  else if (rc === 3) setStatus(T.noCdp, true);
+  else if (rc === 4) setStatus(T.selfFail, false);
+  else if (rc === 2) setStatus(T.badArg, false);
+  else if (rc === -1) setStatus(T.noResult, false);
+  else setStatus(T.failPrefix + rc, false);
+  render();
+}
+
+/*
+ * 真正跑命令。用 setTimeout 错开一拍，让「正在切换…」先画出来 ——
+ * shl().Run(..., true) 是阻塞的，会卡住渲染线程，先画后跑用户才不会以为卡死。
+ */
+function exec_(cmd, okMsg) {
+  if (nodeMissing()) { setStatus(T.noNode, false); return; }
+  setStatus(T.switching);
+  window.setTimeout(function () { afterRun(runCmd(cmd), okMsg); }, 150);
+}
+
+function switchTo(idx) {
+  exec_(quote(WIN.node) + " " + quote(WIN.script) + " use " + idx);
+}
+
+function setPreset(p) {
+  exec_(quote(WIN.node) + " " + quote(WIN.script) + " intensity " + p);
+}
+
+function openLib() {
+  try { shl().Run('explorer.exe "' + ntv(WIN.lib) + '"', 1, false); } catch (e) { }
+}
+
+/*
+ * 全部用 DOM API 拼界面，不用 innerHTML 拼字符串。
+ * 原因是壁纸文件名可能是中文、还可能带 & 或 < —— 走 innerHTML 就得自己转义，
+ * 走 textContent 则天然免疫。图片的 src 也直接赋 Unicode 字符串：
+ * 千万不要对中文路径用 encodeURI —— IE 会把百分号序列按系统 ANSI 码页解码，
+ * 而 encodeURI 产出的是 UTF-8 字节，两边对不上，缩略图必然全裂。
+ */
+function cardFor(item, idx, st, mode, libIdx) {
+  var inLib = (mode !== "browse");
+  var on = false;
+  var note = "";
+  var noteCls = "cur";
+
+  if (inLib) {
+    on = (item.name === st.path);
+    if (on) note = T.using;
+  } else {
+    /* 浏览别的目录时，只有「确实已经在库里」的才高亮。
+       旧版是一律不高亮，理由是「高亮会让人以为已经换上了」；现在配上明确的
+       文字标记之后，高亮反而成了有用的信息：这张你已经有过了。
+       判断用名字 + 字节数，理由见 libIndex。 */
+    var sz = (libIdx && libIdx[item.name] !== undefined) ? libIdx[item.name] : -1;
+    if (sz >= 0 && sz === fileSizeOf(item.path)) {
+      on = (item.name === st.path);
+      note = on ? T.onUseBadge : T.inLibBadge;
+      noteCls = on ? "cur onuse" : "cur inlib";
+    }
+  }
+
+  var c = document.createElement("div");
+  c.className = "card" + (on ? " on" : "");
+  c.onclick = function () {
+    if (inLib) switchTo(idx);
+    else addAndUse(item.path);
+  };
+
+  var img = document.createElement("img");
+  img.onerror = function () {
+    var miss = document.createElement("div");
+    miss.className = "thumb-miss";
+    miss.appendChild(document.createTextNode(T.noPreview));
+    // 说清楚"没有缩略图"不等于"不能用"：webp/avif 在系统自带的预览控件里
+    // 解不了，但这张壁纸换上去完全正常。不解释的话用户会以为图坏了。
+    miss.title = T.noPreviewTip;
+    try { c.replaceChild(miss, img); } catch (e) { }
+  };
+  img.src = fileUrl(item.path);
+  c.appendChild(img);
+
+  var nm = document.createElement("div");
+  nm.className = "nm";
+  nm.appendChild(document.createTextNode(item.name));
+  c.appendChild(nm);
+
+  var cur = document.createElement("div");
+  cur.className = noteCls;
+  if (note) cur.appendChild(document.createTextNode(note));
+  c.appendChild(cur);
+  return c;
+}
+
+function render() {
+  var st = readState();
+  var viewing = browseDir !== null;
+  var list = viewing ? listImages(browseDir) : listWallpapers();
+  /* 只读一次：浏览模式下要用它判断每张图「库里是不是已经有了」。
+     放在循环外算，免得每张卡片都遍历一遍壁纸库目录。 */
+  var libIdx = viewing ? libIndex() : null;
+  var shown = list;
+  var overflow = 0;
+  if (viewing && list.length > BROWSE_MAX) {
+    shown = list.slice(0, BROWSE_MAX);
+    overflow = list.length - BROWSE_MAX;
+  }
+
+  el("ttl").innerHTML = "";
+  el("ttl").appendChild(document.createTextNode(T.title));
+
+  var sub = el("sub");
+  sub.innerHTML = "";
+  if (viewing) {
+    /* 浏览模式：把「在看哪个目录」和「怎么回去」都放在状态行上 */
+    sub.appendChild(document.createTextNode(T.browsing));
+    sub.appendChild(span("v", browseDir));
+    sub.appendChild(span("browse-note", T.browseNote));
+    var bBack = document.createElement("span");
+    bBack.className = "mini";
+    bBack.appendChild(document.createTextNode(T.backToLib));
+    bBack.onclick = backToLib;
+    sub.appendChild(bBack);
+  } else {
+    sub.appendChild(document.createTextNode(T.currentLabel));
+    sub.appendChild(span("v", st.path ? st.path : T.themeBuiltin));
+    sub.appendChild(document.createTextNode("　　" + T.presetLabel));
+    sub.appendChild(span("v", T.presetName[st.preset] || st.preset));
+    if (st.missing) sub.appendChild(span("warn", "　" + T.missingNote));
+    if (!st.enabled) sub.appendChild(span("warn", "　" + T.disabledNote));
+  }
+
+  var grid = el("grid");
+  grid.innerHTML = "";
+  if (!shown.length) {
+    var em = document.createElement("div");
+    em.className = "empty";
+    em.appendChild(document.createTextNode(viewing ? T.browseEmpty1 : T.empty1));
+    em.appendChild(document.createElement("br"));
+    em.appendChild(document.createTextNode(viewing ? T.browseEmpty2 : T.empty2));
+    grid.appendChild(em);
+  } else {
+    for (var i = 0; i < shown.length; i++) {
+      grid.appendChild(cardFor(shown[i], i + 1, st, viewing ? "browse" : "lib", libIdx));
+    }
+    /* 超出上限要说出来。默默只显示 60 张，用户会以为目录里就这么点图 */
+    if (overflow > 0) {
+      var ov = document.createElement("div");
+      ov.className = "empty";
+      ov.appendChild(document.createTextNode(
+        T.browseOver1 + list.length + T.browseOver2 + BROWSE_MAX + T.browseOver3));
+      grid.appendChild(ov);
+    }
+  }
+
+  el("lb").innerHTML = "";
+  el("lb").appendChild(document.createTextNode(T.strength + "　"));
+  var ps = ["light", "medium", "strong"];
+  var box = el("presets");
+  box.innerHTML = "";
+  for (var k = 0; k < ps.length; k++) {
+    var b = document.createElement("span");
+    b.className = "btn" + (st.preset === ps[k] ? " on" : "");
+    b.appendChild(document.createTextNode(T.presetName[ps[k]]));
+    (function (p) { b.onclick = function () { setPreset(p); }; })(ps[k]);
+    box.appendChild(b);
+  }
+
+  var act = el("actions");
+  act.innerHTML = "";
+  /* .btn.ghost 是 float:right，所以先 append 的靠右。
+     视觉上从左到右依次是：浏览文件夹… / 刷新 / 打开壁纸库 / 关闭 */
+  var bClose = document.createElement("span");
+  bClose.className = "btn ghost";
+  bClose.appendChild(document.createTextNode(T.closeWin));
+  bClose.onclick = function () { window.close(); };
+  act.appendChild(bClose);
+
+  var bLib = document.createElement("span");
+  bLib.className = "btn ghost";
+  bLib.appendChild(document.createTextNode(T.openLib));
+  /* 这个按钮只是打开文件夹，必须说清楚。上一位用户的困惑正出在这里：
+     点开它、在资源管理器里选了一张图，然后期待界面跟着变 —— 当然不会。 */
+  bLib.title = T.openLibTip;
+  bLib.onclick = openLib;
+  act.appendChild(bLib);
+
+  var bRe = document.createElement("span");
+  bRe.className = "btn ghost";
+  bRe.appendChild(document.createTextNode(T.refresh));
+  bRe.onclick = render;
+  act.appendChild(bRe);
+
+  /* 本轮新增的主按钮：挑文件夹 → 列出里面的图 → 点哪张换哪张，一步到位 */
+  var bPick = document.createElement("span");
+  bPick.className = "btn primary";
+  bPick.appendChild(document.createTextNode(T.pickFolder));
+  bPick.onclick = pickFolder;
+  act.appendChild(bPick);
+}
+
+/*
+ * 判定是否自检模式。
+ * 主判据是「标志文件存不存在」，不是命令行参数 —— 命令行要靠 HTA 的
+ * oWp.commandLine，而那个属性拿不拿得到、拿到什么格式都不太可靠。
+ * 实测过：用命令行传 selftest 时它没进去，窗口就一直开着挂在那儿。标志文件没有这个问题。
+ */
+function isSelfTest() {
+  try { if (fso().FileExists(ntv(WIN.flag))) return true; } catch (e) { }
+  try { return String(oWp.commandLine).toLowerCase().indexOf("selftest") >= 0; }
+  catch (e2) { return false; }
+}
+
+/*
+ * 启动即留痕。
+ * HTA 是最难查的一类程序：它跑在另一个进程里，标准输出拿不到，界面上的
+ * 报错也截不下来。所以只要标志文件在，脚本一执行就先落一行 ——
+ * 这样后面无论哪一步炸了，都能从「有没有 BOOT 这行」判断到底走到哪。
+ * 上一版没有这个，自检没出日志时完全看不出是没跑起来还是中途炸了。
+ */
+try {
+  if (fso().FileExists(ntv(WIN.flag))) {
+    /* 先清空上一轮的日志（本次自检从零开始），再交给 slog 以 UTF-8 逐行写 */
+    fso().CreateTextFile(ntv(WIN.log), true, false).Close();
+    slog("BOOT=SCRIPT_RAN");
+    slog("FLAG_PATH=" + WIN.flag);
+    slog("LIB=" + WIN.lib);
+  }
+} catch (eBoot) { }
+
+/*
+ * 自检模式：mshta.exe "壁纸选择器.hta" selftest
+ * 结果写 logs/picker-selftest.txt。不写日志就等于没有证据 —— 本机的
+ * PowerShell 工具不回传 stdout，退出码 0 也完全不能当成功凭据。
+ */
+/*
+ * 追加一行到自检日志。
+ * 每次「读全量 + 拼新行 + 覆盖写」——顿开销可以忽略，换来的是
+ * 「任何一步崩掉，之前那几行都已经在磁盘上了」。攒到最后统一写，
+ * 一旦中途抛错就什么证据都没有。
+ *
+ * 必须走 ADODB.Stream 写成 UTF-8。原因：FSO 的 CreateTextFile / OpenTextFile
+ * 在不指定 format 时按系统 ANSI(GBK) 落盘，于是日志里的中文壁纸名到了
+ * UTF-8 读取端（Read 工具、node）全是乱码。这不是"显示难看"—— 排查时会被
+ * 那行乱码带偏，「记录的中文壁纸名读错了」这种误判就是这么来的，白查一轮。
+ * ADODB 拿不到才退回 FSO：宁可编码将就，也不能没有日志。
+ */
+function slog(line) {
+  var txt = readTextUtf8(WIN.log) + String(line) + "\r\n";
+  try {
+    var s = new ActiveXObject("ADODB.Stream");
+    s.Type = 2;
+    s.Charset = "utf-8";
+    s.Open();
+    s.WriteText(txt);
+    s.SaveToFile(ntv(WIN.log), 2);
+    s.Close();
+    return true;
+  } catch (e1) {
+    try {
+      var t = fso().OpenTextFile(ntv(WIN.log), 8, true);
+      t.Write(String(line) + "\r\n");
+      t.Close();
+      return true;
+    } catch (e2) { return false; }
+  }
+}
+
+function selfTest() {
+  var f = null;
+  try { f = new ActiveXObject("Scripting.FileSystemObject"); slog("FSO=OK"); }
+  catch (e1) { slog("FSO=FAIL"); }
+  try { new ActiveXObject("WScript.Shell"); slog("SHELL=OK"); }
+  catch (e2) { slog("SHELL=FAIL"); }
+
+  try {
+    if (f) {
+      slog("LIB_EXISTS=" + (f.FolderExists(ntv(WIN.lib)) ? 1 : 0));
+      slog("NODE_EXISTS=" + (f.FileExists(ntv(WIN.node)) ? 1 : 0));
+      slog("SCRIPT_EXISTS=" + (f.FileExists(ntv(WIN.script)) ? 1 : 0));
+    }
+
+    var list = listWallpapers();
+    slog("WALLPAPER_COUNT=" + list.length);
+    var st = readState();
+    slog("STATE_PATH=" + (st.path || "(none)"));
+    slog("STATE_PRESET=" + st.preset);
+    slog("STATE_ENABLED=" + (st.enabled ? 1 : 0));
+    // 这三条是拿截图换来的。之前 current.json 按 ASCII 读，中文壁纸名读成乱码，
+    // 于是 FileExists(乱码路径) 失败、误报「文件已不存在」、并且文件名比对不上，
+    // 当前那张卡片也不再高亮。日志里只打一行乱码根本看不出来，必须落成断言。
+    slog("STATE_MISSING=" + (st.missing ? 1 : 0));
+    var inList = 0;
+    for (var li = 0; li < list.length; li++) { if (list[li].name === st.path) inList = 1; }
+    slog("STATE_IN_LIST=" + inList);
+
+    // 命令管道端到端。光「能调起来」不算数，要拿到真实退出码。
+    slog("NODE_VERSION_RC=" + runCmd(quote(WIN.node) + " --version"));
+    // list 是只读命令，可以放心在自检里真跑一次，验证整条链路（含引号拼接）
+    slog("LIST_CMD_RC=" + runCmd(quote(WIN.node) + " " + quote(WIN.script) + " list"));
+    slog("LIST_CMD_OUT_BYTES=" + readAll(RUN_TXT).length);
+
+    // ---- 本轮新增能力的地基（「浏览文件夹…」和拖图都靠它们）----
+    // 自检要cover住新路径，否则下次改坏了自己都不知道。
+    // Shell.Application 是「浏览文件夹…」的前提
+    try { new ActiveXObject("Shell.Application"); slog("SHELLAPP=OK"); }
+    catch (e6) { slog("SHELLAPP=FAIL"); }
+    // 能不能列任意目录的图（不只是壁纸库那一个目录）
+    var rootImgs = [];
+    try { rootImgs = listImages(WIN.root); } catch (e7) { rootImgs = []; }
+    slog("ROOT_IMG_COUNT=" + rootImgs.length);
+    // 拖拽路径解析：file:/// 形式、百分号编码形式、原生反斜杠形式，
+    // 三种都必须还原成同一条路径。中文壁纸名正好在这里过一遍 ——
+    // 百分号序列的往返编解码是这条链路上最容易出错的一环。
+    if (list.length) {
+      var pp = list[0].path;
+      var u1 = "file:///" + String(pp).replace(/\\/g, "/");
+      var u2 = encodeURI(u1).replace(/#/g, "%23");
+      slog("PATH_PLAIN=" + (fileUrlToPath(u1) === pp ? 1 : 0));
+      slog("PATH_ENCODED=" + (fileUrlToPath(u2) === pp ? 1 : 0));
+      slog("PATH_RAW=" + (fileUrlToPath(pp) === pp ? 1 : 0));
+      slog("PATH_JUNK=" + (fileUrlToPath("不是图片也不是路径") === null ? 1 : 0));
+    }
+
+    // 界面是不是真的画出来了 —— 自检通过不等于画出来了，本机踩过这个坑
+    render();
+    var all = document.getElementsByTagName("div"), nCard = 0;
+    for (var i = 0; i < all.length; i++) {
+      if (String(all[i].className || "").indexOf("card") === 0) nCard++;
+    }
+    slog("DOM_CARD_COUNT=" + nCard);
+    // 高亮数必须和「当前壁纸在库里」一致：1 张卡片被标成「使用中」。
+    // 这条能同时抓住两类问题：文件名比对失败、以及 set_status 没渲染出来。
+    var nOn = 0;
+    for (var oi = 0; oi < all.length; oi++) {
+      if (String(all[oi].className || "").indexOf("card on") === 0) nOn++;
+    }
+    slog("DOM_ON_COUNT=" + nOn);
+    // 新增的「浏览文件夹…」按钮必须真的渲染出来。
+    // 这条不走截图 —— 截图会被残留窗口干扰（截到旧界面，看着像按钮没渲染），
+    // 而这条断言直接查 DOM，不受影响，是「按钮在」最直接的证据。
+    var sps = document.getElementsByTagName("span"), nPick = 0;
+    for (var pi = 0; pi < sps.length; pi++) {
+      if (String(sps[pi].className || "").indexOf("btn primary") >= 0) nPick++;
+    }
+    slog("DOM_PICK_BTN=" + nPick);
+
+    // 浏览模式的渲染路径也要跑一遍。这段代码不点按钮就永远走不到，
+    // 而它恰恰是本轮新功能的主体 —— 不覆盖等于没验证。
+    // 用壁纸库自己当"被浏览的目录"：卡片数应保持 2，且出现「返回壁纸库」。
+    browseDir = WIN.lib;
+    render();
+    var sps2 = document.getElementsByTagName("span"), nBack = 0;
+    for (var bi = 0; bi < sps2.length; bi++) {
+      if (String(sps2[bi].className || "").indexOf("mini") >= 0) nBack++;
+    }
+    var dv2 = document.getElementsByTagName("div"), nCard2 = 0, nMark2 = 0;
+    for (var ci = 0; ci < dv2.length; ci++) {
+      var cn2 = String(dv2[ci].className || "");
+      if (cn2.indexOf("card") === 0) nCard2++;
+      /* 「已在壁纸库」标记。这里拿壁纸库自己当被浏览的目录，所以每一张都该
+         被标上 —— 这条断言直接盯住本轮的核心修复点：浏览视图必须说得出
+         「这张库里已经有了，点它不会再多出一份」。 */
+      if (cn2.indexOf("cur inlib") === 0 || cn2.indexOf("cur onuse") === 0) nMark2++;
+    }
+    slog("BROWSE_CARDS=" + nCard2);
+    slog("BROWSE_INLIB_MARKS=" + nMark2);
+    slog("BROWSE_BACK_BTN=" + nBack);
+    // 浏览模式的提示语里必须真的有「预览」二字，且「返回壁纸库」要给得出来。
+    // 这两条是「以为全选进来了」那类困惑的止血点，改文案时删掉了就得报出来。
+    var subTxt = "";
+    try { subTxt = String(el("sub").innerText || ""); } catch (e8) { }
+    slog("BROWSE_HINT_LEN=" + subTxt.length);
+    slog("BROWSE_HINT_PREVIEW=" + (subTxt.indexOf(T.browseNote) >= 0 ? 1 : 0));
+    slog("BROWSE_HINT_BACK=" + (subTxt.indexOf(T.backToLib) >= 0 ? 1 : 0));
+    browseDir = null;
+    render();
+    // 结算文案：必须同时说清「收的是哪一张」「壁纸库共几张（旧的一张没动）」「原目录几张未动」。
+    // 点完图之后用户就靠这一行判断自己有没有丢东西，少一件就等于没解释。
+    var stTxt = settleText("D:/src/壁纸.jpg", "D:/src", 47, 3);
+    slog("SETTLE_TEXT=" + stTxt);
+    var settleOk = 1;
+    if (stTxt.indexOf("壁纸.jpg") < 0) settleOk = 0;      // 收的是哪一张
+    if (stTxt.indexOf(" 3 ") < 0) settleOk = 0;           // 壁纸库现在共几张
+    if (stTxt.indexOf("一张都没动") < 0) settleOk = 0;      // 库里旧的没被动过
+    if (stTxt.indexOf("D:/src") < 0) settleOk = 0;        // 原目录路径
+    if (stTxt.indexOf("47") < 0) settleOk = 0;            // 原目录张数
+    slog("SETTLE_OK=" + settleOk);
+    var ttl = "";
+    try { ttl = String(el("ttl").innerText || ""); } catch (e4) { }
+    slog("DOM_TITLE_LEN=" + ttl.length);
+    // 这条才是关键证据：中文要原样活到 DOM 里
+    // （node 转义 → JScript 字符串 → textContent → innerText）
+    slog("DOM_TITLE_MATCH=" + (trim(ttl) === trim(T.title) ? 1 : 0));
+    slog("DOM_TITLE_RAW=" + ttl);
+    slog("DOM_GRID_LEN=" + String(el("grid").innerHTML || "").length);
+    slog("ALL=DONE");
+  } catch (e9) {
+    slog("FATAL=" + String(e9.message || e9));
+    slog("ALL=DONE");
+  }
+
+  // window.close() 在 HTA 里不一定真能关掉窗口（实测进程会留着），
+  // 所以外部调用方读完日志后要自己收尸。这里只是尽力而为，不许它抛错。
+  try { window.close(); } catch (e5) { }
+}
+
+/*
+ * 拖拽：把图片从资源管理器直接拖进本窗口 = 收图进库并换上。
+ * 绑在 document 上而不是 body 上 —— IE 里文件拖放的事件源是 document，
+ * 只绑 body 有时收不到。
+ * 拖进来的东西认不出来时必须给一句可读的话：默默失败正是这次要根治的毛病。
+ */
+function bindDrop() {
+  var block = function (ev) {
+    try { var e = ev || window.event; if (e) e.returnValue = false; } catch (e1) { }
+    return false;
+  };
+  document.ondragover = block;
+  document.ondragenter = block;
+  document.ondrop = function (ev) {
+    block(ev);
+    var e = ev || window.event;
+    var p = extractDropPath(e);
+    if (!p) { setStatus(T.dropFail, false); return false; }
+    addAndUse(p);
+    return false;
+  };
+}
+
+window.onload = function () {
+  if (isSelfTest()) {
+    try { window.resizeTo(1, 1); window.moveTo(-3000, -3000); } catch (e1) { }
+    try { selfTest(); } catch (e2) {
+      slog("FATAL_ONLOAD=" + String(e2.message || e2));
+      slog("ALL=DONE");
+    }
+    try { window.close(); } catch (e3) { }
+    return;
+  }
+  try { window.resizeTo(880, 640); window.moveTo(220, 110); } catch (e) { }
+  // 双击启动时主动抢一次焦点：否则窗口会开在别的程序后面，
+  // 用户看到的就是「点了没反应」—— 这正是这轮要解决的问题。
+  try { window.focus(); } catch (e2) { }
+  try { bindDrop(); } catch (e3) { }
+  render();
+};
+</script>
+</body>
+</html>

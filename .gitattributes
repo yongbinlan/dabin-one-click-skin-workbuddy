@@ -1,0 +1,10 @@
+# 这个仓库里「编码 + 行尾」是产物正确性的一部分，不是风格问题：
+#
+#   .cmd        必须 GBK 无 BOM + CRLF。写成裸 LF，cmd 会把注释和 echo 残片
+#               当命令执行，双击弹一串「不是内部或外部命令」。
+#   .ps1 / .vbs 必须纯 ASCII。PowerShell 5.1 在 .ps1 无 BOM 时按 ANSI 解析。
+#
+# 所以关掉 git 的一切行尾自动转换，让文件按字节进出。
+# 否则在 autocrlf=true 的机器上 clone，CRLF 会被换成 LF —— .cmd 当场失效，
+# 而且中文看着完全正常，只有在字节层才看得见缺了 0x0D。
+* -text

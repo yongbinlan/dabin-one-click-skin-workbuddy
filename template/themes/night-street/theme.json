@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "night-street",
+  "displayName": "夜街 · 白吊带",
+  "version": "2.0.0",
+  "catalog": {
+    "name": { "en": "Night Street", "zh": "夜街 · 白吊带" },
+    "description": {
+      "en": "Night-street photography mood: warm gold accent, blue-grey secondary, deep ink surface.",
+      "zh": "夜色街拍调性：暖金强调色 + 蓝灰辅助色 + 深墨底，长阅读区带主题蒙版。"
+    },
+    "categories": ["artistic"]
+  },
+  "copy": {
+    "tagline": "夜色街拍 · 暖金细线 · 深墨底"
+  },
+  "images": {
+    "hero": "assets/hero.webp"
+  },
+  "targets": {
+    "workbuddy": {
+      "css": "workbuddy.css",
+      "verification": {
+        "recommended": [
+          { "name": "sidebar", "any": [".conversation-sidebar", ".conversation-list"] },
+          { "name": "workspace", "any": [".teams-main-content", ".teams-content-wrapper"] },
+          { "name": "composer", "any": ["[role='textbox'][contenteditable='true']"] }
+        ],
+        "contexts": [
+          {
+            "name": "home",
+            "when": { "any": [".wb-home-page"] },
+            "recommended": [
+              { "name": "home-header", "any": [".wb-home-header"] },
+              { "name": "home-header-title", "any": [".wb-home-header__title"] },
+              { "name": "home-composer", "any": [".wb-home-composer__input-slot"] },
+              { "name": "quick-actions", "any": [".quick-actions__item"] }
+            ]
+          },
+          {
+            "name": "conversation",
+            "when": { "any": [".cr-theme", ".cb-assistant-message", ".chat-container:not(.chat-container--welcome)"] },
+            "recommended": [
+              { "name": "assistant-message", "any": [".cb-assistant-message", ".cr-agent__body"] }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

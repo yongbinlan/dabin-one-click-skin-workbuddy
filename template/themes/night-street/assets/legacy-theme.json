@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "night-street",
+  "name": "夜街 · 白吊带",
+  "hero": "hero.webp",
+  "appearance": "dark",
+  "previewFocus": {
+    "x": 68,
+    "y": 42
+  },
+  "thumbnailFocus": {
+    "x": 68,
+    "y": 42
+  },
+  "thumbnailZoom": 320,
+  "colors": {
+    "accent": "#e0b45c",
+    "secondary": "#6b8fa8",
+    "surface": "#12141d",
+    "text": "#f1e9dc"
+  }
+}
