@@ -37,6 +37,35 @@ const ok = (m) => { console.log("✅ " + m); pass.push(m); };
 const no = (m) => { console.log("❌ " + m); fail.push(m); };
 const hm = (m) => { console.log("⚠️  " + m); warn.push(m); };
 
+/*
+ * 本脚本会打印哪几组结果 —— 单独列一份，只为让**文档引用它，而不是把清单抄一遍**。
+ *
+ * 抄一遍必然会漂：SKILL.md 11.2 原来手抄了「8 项」加 8 条清单，加上第 7 组
+ * （外链）之后那个数字当场就假了 —— 而**没有任何东西会因此报错**。
+ * 这与第 4 组要治的是同一个毛病，所以处理方式也照抄第 4 组：
+ * 清单落在代码里，文档只写「共 N 组」，那个 N 由第 4 组自己核。
+ */
+const CHECKS = [
+  "字节级回环（HEAD 存的字节 == 磁盘字节；治 .gitattributes 失效）",
+  ".cmd / .vbs / .ps1 编码与行尾",
+  "私有路径与凭据",
+  "自检项数与 --only 守卫完整性",
+  "文档「N 项自检」与代码事实一致",
+  "template/ 文件数与文档一致",
+  "展示图存在性与非空",
+  "根目录必备文件",
+  "文档里引用的 GitHub 仓库/账号真实存在",
+];
+
+// --list 要在任何检查跑之前就退出：它回答的是「你都会查什么」，
+// 而 --worktree 之类会影响结果，不该被它触发。
+if (process.argv.includes("--list")) {
+  console.log(`check-publish.mjs 共 ${CHECKS.length} 组：`);
+  CHECKS.forEach((c, i) => console.log(`  ${String(i + 1).padStart(2)}  ${c}`));
+  console.log("\n用法：node scripts/check-publish.mjs [--worktree] [--list]");
+  process.exit(0);
+}
+
 function git(...args) {
   const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", windowsHide: true });
   if (r.status !== 0) throw new Error(`git ${args.join(" ")} 失败：${(r.stderr || "").trim()}`);
@@ -251,6 +280,29 @@ if (!USE_WORKTREE) {
     no(`template/ 实际 ${tplCount} 个文件，文档写着：` +
        badCount.map((c) => `${c.rel}:${c.line} 写着 ${c.n}`).join(" / "));
   else ok(`template/ 文件数与文档一致（${tplCount} 个，${claimed.length} 处引用）`);
+
+  // 文档若声称「本脚本共 N 组」，N 必须等于 CHECKS.length。
+  // 加这条的原因很具体：SKILL.md 11.2 原来手抄了清单和「8 项」，
+  // 补上第 7 组（外链）之后数字当场就假了 —— 而**没有任何东西会因此报错**，
+  // 与本节要治的毛病一模一样。所以要么别写数，写了就得有人核。
+  const selfClaims = [];
+  for (const rel of md) {
+    const isCode = /\.(mjs|js|json|css|ya?ml)$/i.test(rel);
+    const lines = (readText(rel).text || "").split(/\r?\n/);
+    lines.forEach((line, i) => {
+      if (isCode && /^\s*(\/\/|\/\*|\*|#|<!--)/.test(line)) return;
+      // 认「check-publish.mjs 共 N 组」这种写法；本文件里的模板串用的是
+      // ${CHECKS.length} 而非数字，所以不会自匹配。
+      for (const m of line.matchAll(/check-publish\.mjs\s*共\s*(\d+)\s*组/g))
+        selfClaims.push({ rel, line: i + 1, n: +m[1] });
+    });
+  }
+  const badSelf = selfClaims.filter((c) => c.n !== CHECKS.length);
+  if (selfClaims.length === 0) hm("文档里没有「check-publish.mjs 共 N 组」表述 —— 若是有意不写数，忽略");
+  else if (badSelf.length)
+    no(`check-publish.mjs 实际 ${CHECKS.length} 组，文档写着：` +
+       badSelf.map((c) => `${c.rel}:${c.line} 写着 ${c.n} 组`).join(" / "));
+  else ok(`check-publish.mjs 组数与文档一致（${CHECKS.length} 组）`);
 }
 
 // ---------- 5) 展示图 ----------

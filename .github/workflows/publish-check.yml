@@ -25,9 +25,13 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # v4 那两个 action 是跑在 Node 20 上的，已被 GitHub 标记弃用并强制
+      # 改用 Node 24，每次跑都会刷一大段 deprecation 警告 —— 噪音会掩盖真问题，
+      # 所以升到当前的 v7 主线（查过 v7 的 release notes：没有影响本用法的变更，
+      # checkout 只是收紧 fork PR 的 checkout，setup-node 是 ESM 化）。
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
 
