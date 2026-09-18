@@ -58,7 +58,7 @@ node <本skill目录>\scripts\init.mjs --dest D:\my\workbuddy-skin
 它会依次做完这些事，每一步都打印做了什么：
 
 1. **探测本机环境** —— node、WorkBuddy 主程序、CodeDrobe CLI
-2. **展开工程** —— 把 `template/` 铺到目标目录（35 个文件，已剔除本机专属项）
+2. **展开工程** —— 把 `template/` 铺到目标目录（36 个文件，已剔除本机专属项）
 3. **生成 `launcher\env.cmd`** —— 本机路径落在这一份文件里
 4. **构建壁纸选择器** —— 生成 `launcher\壁纸选择器.hta`（纯 ASCII 产物）
 5. **构建主题包** —— `build\<主题id>-<版本>.codedrobe-theme`
@@ -278,6 +278,39 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 - 产物必须**纯 ASCII**：中文全部转义成 `\uXXXX`（FSO 只认 ASCII/UTF-16）。
 - `window.close()` **关不掉**宿主，不要靠它退出。
 
+#### 7.10.1 `.hta` 的图标：两条路都走不通（实测）
+
+想给壁纸选择器换个图标时，先记住这条**实测结论**，能省掉一轮白工：
+
+| 想要的效果 | 机制 | 实测结果 |
+|---|---|---|
+| 运行时窗口 / 任务栏图标 | `<HTA:APPLICATION ICON="…">` | **不生效** |
+| Explorer 文件夹里那个 `.hta` 图标 | 文件类型（注册表 `htafile`） | **改不了**（与文件内容无关） |
+
+ICON 属性的排查经过（都不是猜的）：
+
+- 相对路径 + 工作目录指向 `.hta` 所在目录 → 不成
+- 绝对路径（反斜杠 / 正斜杠都试）→ 不成
+- ICO 全部改成 DIB 条目（怕 mshta 走老 GDI 不认 PNG 条目）→ 不成
+- 拿一个纯洋红方块当图标，排除"是图不好看"的可能 → 不成
+- 最后直接问窗口：`WM_GETICON`（small/big）与 `GetClassLongPtr(GCLP_HICON/HICONSM)`
+  **全为 0** —— mshta 压根没给窗口挂图标，标题栏和任务栏于是都用系统默认图标。
+  （Win10 19041 / mshta。这组件冻结多年，别指望它修。）
+
+所以模板里那条 `ICON="picker.ico"` 是**照文档保留**的，不是可依赖的手段；
+构建器会保证它与图标文件一致，但**不要**把它当成"图标已经解决了"。
+
+真正能让图标可见的只有外壳，三条路各有代价，按需选：
+
+| 做法 | 效果 | 代价 |
+|---|---|---|
+| 建一个指向 `.hta` 的 `.lnk`，设 `IconLocation` | 文件夹里那个入口有图标 | 与 `.hta` 同名，隐藏扩展名时看着像重复项；要么把 `.hta` 设为隐藏 |
+| 改 `HKCU\Software\Classes\htafile\DefaultIcon` | 本机**所有** `.hta` 都换图标 | 影响面超出本工程，属于越权，**必须用户明确要求才做** |
+| `launcher\desktop.ini` + `[.ShellClassInfo] IconResource` | 给**目录**换图标 | 不解决单个文件；`desktop.ini` 要设隐藏+系统属性 |
+
+补充：`.ico` 里**至少要有 DIB 条目**，只有 PNG 条目的 ICO 在老 GDI 路径上读不出来
+（虽然本例里 mshta 是彻底不读，但快捷方式那条路仍在用老路径，别只放 PNG）。
+
 ### 7.11 清理类操作的三铁律
 
 只要涉及「删 / 移走 / 归档」，先问三个问题：
@@ -325,6 +358,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 ├── launcher\                 ← 用户唯一需要接触的目录（全部双击）
 │   ├── 注入皮肤.cmd / 换壁纸.cmd / 调强度.cmd / 查看状态.cmd / 还原原生.cmd
 │   ├── 壁纸选择器.hta         （生成物；带缩略图，最直观的换壁纸方式）
+│   ├── picker.ico            （生成物；窗口与任务栏图标，必须与 .hta 同目录）
 │   ├── workbuddy-skin-launcher.vbs   ← 常驻启动器（快捷方式指向它）
 │   ├── env.cmd               （生成物；本机路径，换机器要重生成）
 │   └── 使用说明.txt
@@ -332,7 +366,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 │   ├── init 相关：write-env.mjs
 │   ├── 主题相关：build-theme.mjs
 │   ├── 壁纸相关：set-wallpaper.mjs / skin-state.mjs / lib-cdp.mjs
-│   ├── 界面相关：picker.template.hta / build-wallpaper-picker.mjs
+│   ├── 界面相关：picker.template.hta / picker.ico / build-wallpaper-picker.mjs
 │   └── 自检相关：verify-launcher.mjs / check-shortcuts.mjs / cdp-probe.mjs / diag-occluders.mjs
 ├── themes\<主题>\            ← 主题源
 │   ├── theme.json            （CodeDrobe 清单：id / displayName / version / targets）

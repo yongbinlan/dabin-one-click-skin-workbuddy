@@ -7,6 +7,7 @@
 <HTA:APPLICATION
   ID="oWp"
   APPLICATIONNAME="WorkBuddyWallpaperPicker"
+  ICON="picker.ico"
   BORDER="thin"
   CAPTION="yes"
   SHOWINTASKBAR="yes"
@@ -17,6 +18,17 @@
   CONTEXTMENU="no"
   SELECTION="no"
 />
+<!--
+  ICON="picker.ico" —— 这是 HTA 的**文档化**窗口图标机制，但本机实测**不生效**：
+  文件里写着绝对/相对两种路径都试过，窗口句柄查下来 WM_GETICON 与 GCLASSLONG
+  全为 0，即 mshta 压根没给窗口挂图标，标题栏与任务栏都退回系统默认图标。
+  （Win10 19041。mshta 是冻结多年的遗留组件，不打算修。）
+  所以：这条属性留着是"照文档写"和"哪天换机器可能就好了"，**不是**可依赖的手段。
+  真要让图标可见，只能靠外壳：快捷方式（.lnk 的 IconLocation 完全可控）
+  或改 HKCU 下的 htafile\DefaultIcon（影响本机所有 .hta）。详见 SKILL.md 7.10.1。
+  路径仍按相对写（mshta 以 .hta 所在目录为基准），拷贝由生成器负责 ——
+  万一哪天生效了，相对路径才不会把产物钉死在这台机器上。
+-->
 <!--
   这个文件是「壁纸选择器」的模板，不是给人双击的产物。
   真正的产物由 tools/build-wallpaper-picker.mjs 生成：launcher\壁纸选择器.hta

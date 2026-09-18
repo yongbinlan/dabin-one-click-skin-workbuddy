@@ -262,12 +262,18 @@ if (!USE_WORKTREE) {
     if (nums.length === 0) hm("文档里没有「N 项自检」表述 —— 若是有意省略，忽略");
   }
 
-  // template/ 展开的文件数（README 承诺过「35 个文件」）
+  // template/ 展开的文件数（README 承诺过一个具体数字）
   const tplCount = tracked.filter((f) => f.startsWith("template/")).length;
   const claimed = [];
   for (const rel of md) {
+    const isCode = /\.(mjs|js|json|css|ya?ml)$/i.test(rel);
     const lines = (readText(rel).text || "").split(/\r?\n/);
     lines.forEach((line, i) => {
+      // 与「N 项自检」那条同一条规矩：代码文件里跳过注释行。
+      // 漏了这条的实际后果很具体 —— 本文件下方那句「README 承诺过「N 个文件」」
+      // 自己会被判成违规声明，于是每加一个 template 文件就多一条假红灯。
+      // 加文件那次就是这么暴露的：报的是 check-publish.mjs:265 写着 35。
+      if (isCode && /^\s*(\/\/|\/\*|\*|#|<!--)/.test(line)) return;
       // 只认「展开工程 —— ... N 个文件」「已剔除本机专属项」这类 template 语境，
       // 免得把别处的「3 个文件」也拖进来误报
       if (!/\u5c55\u5f00|\u5de5\u7a0b\u6a21\u677f|\u5df2\u5254\u9664/.test(line)) return;

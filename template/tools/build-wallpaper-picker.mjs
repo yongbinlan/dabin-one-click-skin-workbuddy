@@ -40,6 +40,14 @@ const LOG_DIR = path.join(ROOT, "logs");
 const SELFTEST_LOG = path.join(LOG_DIR, "picker-selftest.txt");
 const SELFTEST_FLAG = path.join(LOG_DIR, "picker-selftest.flag");
 
+// 图标：模板里的 ICON="picker.ico" 是**相对**路径，mshta 以 .hta 所在目录为基准
+// 解析它，所以图标必须和产物同目录。源文件放在 tools/（跟着代码走），
+// 生成时拷一份到 launcher/（跟着产物走）。
+const ICON_SRC = path.join(__dir, "picker.ico");
+const ICON_OUT = path.join(ROOT, "launcher", "picker.ico");
+const ICON_REF = "picker.ico";
+
+
 // 仅用于报告「本次构建用的是哪个 node」——不再是注入到产物里的东西
 const NODE_EXE = process.execPath;
 
@@ -166,6 +174,35 @@ const ES6_TRAPS = [
 const traps = ES6_TRAPS.filter(([re]) => re.test(jsCode)).map(([, n]) => n);
 if (traps.length) fail("代码块用了 ES5 之外的语法，HTA 的引擎不认", traps);
 
+// 3b-2. ICON 属性 —— 只在 <HTA:APPLICATION ... /> 元素内部取属性，不全文 grep。
+//
+// 为什么必须限定范围：这一项的第一版写成 out.includes('ICON="picker.ico"')，
+// 而模板里恰好有一段解释 ICON 用法的注释也写着这串字 —— 于是把 ICON 属性
+// 整行删掉，检查照样报「关键内容 8/8」。**注释把门禁骗过去了。**
+// 这正是那句「扫描类门禁的失效方式不是判错，而是根本没扫到」的又一次实例；
+// ES6 那项早就用 stripComments() 防住了，这里改成按元素取属性，从根上避免。
+const htaBlock = /<HTA:APPLICATION([\s\S]*?)\/>/.exec(out);
+if (!htaBlock) fail("产物里找不到 <HTA:APPLICATION ... /> 元素");
+
+const iconAttr = /ICON\s*=\s*"([^"]*)"/.exec(htaBlock[1]);
+if (!iconAttr) {
+  fail("HTA:APPLICATION 里没有 ICON 属性", [
+    `该属性是照文档保留的（本机 mshta 实测不生效，见 SKILL.md 7.10.1），应为 ICON="${ICON_REF}"`,
+    "它不见了说明模板被改过 —— 若是有意删掉，就连这条检查一起去掉，别留个假要求",
+  ]);
+}
+// 绝对路径会把产物钉死在生成它的那台机器上。（本机这条属性不生效，
+// 所以这里拦的是"将来哪天生效了、或者被别的宿主读到"的情况。）
+if (/^[A-Za-z]:[\\/]|^\\\\|^[\\/]/.test(iconAttr[1])) {
+  fail("ICON 是绝对路径，产物不可移植", [
+    `当前值：${iconAttr[1]}`,
+    "改成相对文件名（mshta 以 .hta 所在目录为基准解析），由本脚本把图标拷到产物旁边",
+  ]);
+}
+if (iconAttr[1] !== ICON_REF) {
+  fail(`ICON 指向的不是 ${ICON_REF}`, [`当前值：${iconAttr[1]}`]);
+}
+
 // 3c. 关键内容在不在（防止模板被改到结构性失效）
 const must = [
   ['HTA:APPLICATION', out.includes("HTA:APPLICATION")],
@@ -178,6 +215,23 @@ const must = [
 ];
 const lost = must.filter(([, ok]) => !ok).map(([n]) => n);
 if (lost.length) fail("产物缺少关键内容", lost);
+
+// 3c-2. 图标文件本身：必须存在，且真的是 .ico
+// 只判"文件在不在"不够 —— 一个 0 字节或被 Git 当文本处理坏掉的文件同样"存在"，
+// 拿去做快捷方式的 IconLocation 会静默退回默认图标。
+if (!fs.existsSync(ICON_SRC)) {
+  fail("图标源文件不存在，外壳（快捷方式）就没法带上项目图标", [`预期位置：${ICON_SRC}`]);
+}
+{
+  const ib = fs.readFileSync(ICON_SRC);
+  const magicOk = ib.length >= 6 && ib[0] === 0 && ib[1] === 0 && ib[2] === 1 && ib[3] === 0;
+  if (!magicOk) {
+    fail("图标文件不是有效的 .ico（缺 00 00 01 00 文件头）", [`${ICON_SRC} 前 8 字节：${[...ib.subarray(0, 8)].join(" ")}`]);
+  }
+  const n = ib.readUInt16LE(4);
+  if (!(n >= 1)) fail("图标文件里一个图像尺寸都没有", [`声明尺寸数：${n}`]);
+}
+
 
 // 3d. 引用一致性：脚本里每一处 WIN.xxx，WIN 对象里都必须真的有这个键。
 //     这条是拿血换来的。先前加了个 WIN.flag 的用法，却忘了在 WIN 对象里定义它，
@@ -209,11 +263,23 @@ if (missing.length) fail("以下路径不存在，生成的界面点了也换不
 fs.mkdirSync(LOG_DIR, { recursive: true });
 fs.writeFileSync(OUT, out, "ascii");
 
+// 图标也要落到产物旁边，且每次构建都刷一遍。
+// 不能靠 init.mjs 从 template/ 拷过来就算完 —— 换目录、单跑本脚本、
+// 或者手动删过 launcher/ 里的图标，那条路径都覆盖不到。
+fs.copyFileSync(ICON_SRC, ICON_OUT);
+if (!fs.existsSync(ICON_OUT) || fs.statSync(ICON_OUT).size !== fs.statSync(ICON_SRC).size) {
+  fail("图标拷贝后校验不一致", [`源 ${ICON_SRC}`, `目标 ${ICON_OUT}`]);
+}
+const iconKB = (fs.statSync(ICON_OUT).size / 1024).toFixed(1);
+
 console.log(`✅ 已生成 ${OUT}`);
 console.log(`   体积 ${out.length}B ｜ 纯 ASCII ✅（非 ASCII 字符 0 个）`);
 console.log(`   转义的中文字符：${escapedCount} 个 ｜ JScript 代码块 ${jsLines} 行`);
 console.log(`   语法校验：解析通过 ✅ ｜ ES5 合规 ✅ ｜ 关键内容 ${must.length}/${must.length} ✅`);
+console.log(`   图标资产：${ICON_REF}（${iconKB}KB，与产物同目录）`);
+console.log(`             ⚠️ 仅供外壳使用：实测本机 mshta 不应用 ICON 属性（SKILL.md 7.10.1）`);
 console.log(`   壁纸库：${path.join(ROOT, "wallpapers")}`);
+
 
 // ---------------------------------------------------------------------------
 // 5. --selftest：真的把界面拉起来，再读回它自己写的证据

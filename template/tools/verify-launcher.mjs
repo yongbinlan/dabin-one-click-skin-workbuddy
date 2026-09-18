@@ -13,7 +13,7 @@
  *   7) launcher/*.cmd 编码 + 行尾    —— 必须 GBK 无 BOM 且 CRLF；
  *                                      UTF-8 会满屏乱码，裸 LF 会把注释当命令跑
  *   8) tools/*.mjs 语法             —— 改动任一脚本后都要全量复核
- *   9) 壁纸选择器产物                —— 重建后须无变化（治"改了模板忘重新生成"）
+ *   9) 壁纸选择器产物                —— 重建后须无变化、纯 ASCII，且图标与产物同目录
  *  10) 界面自检                     —— 真的把界面拉起来，验 DOM 画出来了、命令跑得通
  *  11) .cmd 可执行性                —— 真的把 cmd 拉起来跑一遍，验能跑通并正常退出
  *  12) tools/*.ps1 语法            —— param 必须位于首条语句，否则整个脚本解析不了
@@ -283,14 +283,30 @@ if (want(9)) {
     let nonAscii = 0;
     for (const x of after) if (x > 127) nonAscii++;
     const txt = after.toString("latin1");
-    const need = ['HTA:APPLICATION', 'ID="oWp"', "picker-selftest.flag", "function selfTest", "function runCmd"];
+    const need = ['HTA:APPLICATION', 'ID="oWp"', "picker-selftest.flag", "function selfTest",
+                  "function runCmd", 'ICON="picker.ico"'];
     const missing = need.filter((k) => !txt.includes(k));
     const stale = beforeBuf !== null && !beforeBuf.equals(after);
-    console.log(`9) 壁纸选择器 ${after.length}B ｜ 非 ASCII ${nonAscii} ｜ 关键内容缺 ${missing.length} ｜ 重建后变化 ${stale}`);
+
+    // 图标：三件事缺一不可 —— 属性在、文件在同目录、文件真的是 .ico。
+    // 「属性在但文件不在」是最容易发生的组合（构建脚本拷漏、用户手删）：
+    // 快捷方式那条外壳路径会静默退回默认图标，而窗口那条路本来就无效
+    // （mshta 不应用 ICON，见 SKILL.md 7.10.1），所以这里判的是**文件资产**。
+    const ICON = path.join(ROOT, "launcher", "picker.ico");
+    let iconNote = "OK";
+    if (!fs.existsSync(ICON)) iconNote = "文件缺失";
+    else {
+      const ib = fs.readFileSync(ICON);
+      if (!(ib.length >= 6 && ib[0] === 0 && ib[1] === 0 && ib[2] === 1 && ib[3] === 0)) iconNote = "不是有效 .ico";
+      else iconNote = `${(ib.length / 1024).toFixed(1)}KB/${ib.readUInt16LE(4)} 个尺寸`;
+    }
+
+    console.log(`9) 壁纸选择器 ${after.length}B ｜ 非 ASCII ${nonAscii} ｜ 关键内容缺 ${missing.length} ｜ 重建后变化 ${stale} ｜ 图标 ${iconNote}`);
     if (nonAscii) no(`壁纸选择器含非 ASCII 字节 ${nonAscii} 个 —— 纯 ASCII 的编码假设不成立`);
     else if (missing.length) no("壁纸选择器缺少关键内容：" + missing.join(", "));
     else if (stale) no("壁纸选择器产物是过期的（重建后内容有变）—— 模板改了但没重新生成");
-    else ok(`壁纸选择器产物新鲜且纯 ASCII（${after.length}B）`);
+    else if (iconNote !== "OK" && /缺失|不是有效/.test(iconNote)) no(`图标资产不可用（${iconNote}）：${ICON}`);
+    else ok(`壁纸选择器产物新鲜且纯 ASCII（${after.length}B），图标 ${iconNote}`);
   }
 }
 

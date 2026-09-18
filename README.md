@@ -165,7 +165,7 @@ WorkBuddy 的 `supportsControlChannel` 与 CodeDrobe 的 `host.supported` **都�
 ├── SKILL.md                  ← 给 AI Agent 读的操作手册（人类也能看）
 ├── scripts\
 │   └── init.mjs              ← 一键初始化：展开工程 + 探测本机 + 生成产物
-├── template\                 ← 展开到用户机器上的工程模板（35 个文件）
+├── template\                 ← 展开到用户机器上的工程模板（36 个文件）
 │   ├── launcher\             ← 用户唯一需要接触的目录（全部双击）
 │   ├── tools\                ← 全部脚本
 │   ├── themes\               ← 主题源（改配色改这里）
