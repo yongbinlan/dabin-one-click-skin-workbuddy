@@ -3,7 +3,7 @@
 <head>
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
-<title>WorkBuddy Wallpaper Picker</title>
+<title>WorkBuddy 壁纸选择器</title>
 <HTA:APPLICATION
   ID="oWp"
   APPLICATIONNAME="WorkBuddyWallpaperPicker"
@@ -118,6 +118,26 @@
   .st { margin-top:11px; font-size:12px; color:#8b93a3; min-height:18px; line-height:1.6; }
   .st.ok { color:#5fb27a; }
   .st.err { color:#d95c5c; }
+  /* 文件夹卡片中间那块"缩略图"。和图片卡片同尺寸同位置 —— 用户不需要学
+     第二套操作方式，看到的都是"点一下"。文件夹形状用两个伪元素拼：
+     左上角一个标签、下面一个主体，就是最眼熟的那个轮廓。
+     伪元素万一不生效，也只会剩一个深色块，卡片照常可点、名字照常在。 */
+  .dthumb {
+    width:164px; height:92px; display:block; position:relative;
+    background:#0d0f14; border-radius:3px;
+  }
+  .dthumb:before {
+    content:" "; position:absolute; left:26px; top:26px;
+    width:46px; height:8px; background:#e0b45c; border-radius:3px 3px 0 0;
+  }
+  .dthumb:after {
+    content:" "; position:absolute; left:26px; top:34px;
+    width:76px; height:40px; background:#c99b3f; border-radius:0 4px 4px 4px;
+  }
+  /* 位置（盘符 / 图片 / 桌面）用蓝色区分：位置是"去哪"，文件夹是"进哪"。
+     层级不同，颜色就得说出这件事，不然一排卡片看下来全是文件夹。 */
+  .dthumb.drive:before, .dthumb.drive:after { background:#5b8fd9; }
+  .cur.dirkind { color:#6f7c93; }
 </style>
 </head>
 <body>
@@ -190,7 +210,10 @@ var WIN = {
   script:  ROOT + "\\tools\\set-wallpaper.mjs",
   tmp:     ROOT + "\\logs",
   log:     ROOT + "\\logs\\picker-selftest.txt",
-  flag:    ROOT + "\\logs\\picker-selftest.flag"
+  flag:    ROOT + "\\logs\\picker-selftest.flag",
+  /* 上次挑图的目录。挑图这事有强习惯性 —— 图基本都在同一个目录里，
+     每次都从"这台电脑"翻下去，等于把同一个动作重复做。 */
+  lastDir: ROOT + "\\logs\\picker-last-dir.txt"
 };
 if (!WIN.node) WIN.node = "node";   // 读不到 env.cmd 就退回 PATH 里的 node
 
@@ -239,8 +262,35 @@ var T = {
   pickFolderTitle: "选一张图片直接换上；也可以选一个文件夹，进去慢慢挑",
   pickCanceled: "没有选择，未做任何改动。",
   pickFail: "没能读到所选路径，请在资源管理器里打开它再试。",
-  pickUnsupported: "这台机器上打不开选择框。请改用「打开壁纸库」，或把图片直接拖进本窗口。",
   pickNotImage: "选中的不是图片文件。支持 jpg / jpeg / png / webp / gif / bmp / avif。",
+
+  /* ---- 「选一张图…」的真身：界面自带的图片浏览器 ----
+     为什么不再用系统对话框：Windows 自带的选文件夹框（SHBrowseForFolder）
+     是 XP 时代的控件，**物理上**没有缩略图。用户看得见文件名，看不见图，
+     而挑壁纸恰恰是"看图"的活。本界面早就有一模一样的缩略图网格，
+     那就直接用，不再把用户丢进一个看不见图的框里。
+     系统对话框没有删掉，退到一个备用入口（见 T.dialogBtn）。 */
+  placesTitle: "选个位置开始翻",
+  placesNote: "点一个位置进去。翻到哪一层，那层的文件夹和图片都会列出来；点图片才会换上。",
+  dirsLabel: "文件夹",
+  dirEmpty1: "这里既没有图片，也没有能进去的文件夹。",
+  dirEmpty2: "点「上一级」，或换个位置再看看。",
+  dirsOver1: "文件夹太多，只列了前 ",
+  dirsOver2: " 个（共 ",
+  dirsOver3: " 个）。往更具体的目录里翻，会更快找到。",
+  up: "上一级",
+  changePlace: "换个位置",
+  placePictures: "图片",
+  placeDesktop: "桌面",
+  placeDownloads: "下载",
+  placeLib: "壁纸库",
+  driveFixed: "本地磁盘",
+  driveRemovable: "可移动磁盘",
+  driveNetwork: "网络位置",
+  driveCd: "光驱",
+  driveOther: "磁盘",
+  dialogBtn: "用系统对话框选…",
+  dialogFail: "系统对话框没打开（已记进日志）。上面这套浏览一样能挑图，不用管它。",
   browsing: "正在浏览：",
   browseReady: "已列出下面这些图 —— 它们只是预览，一张都还没进壁纸库。点哪张，才收哪张。",
   /* 「这里只是预览」必须写在最显眼的地方。用户选了文件夹之后，
@@ -373,6 +423,9 @@ var browseDir = null;
 /* 单个目录最多列这么多张。图库动辄上千张，全渲染会把 HTA 卡死 —— */
 /* 超过就只显示前 N 张并明确告知，而不是假装"就这么几张"。 */
 var BROWSE_MAX = 60;
+/* 单个目录最多列这么多**子文件夹**。和图片分开限流：盘符根下常常有几百个
+   文件夹却一张图都没有，用同一个上限会把图片的名额挤掉。 */
+var DIR_MAX = 60;
 
 /* 某个目录里所有支持的图片，按文件名排序 */
 function listImages(dir) {
@@ -550,30 +603,227 @@ function pickedKind(p) {
 }
 
 /*
- * 选一张图（也可以选一个文件夹，进去慢慢挑）。
- * 用系统自带的 BrowseForFolder，它返回的路径是 Unicode，中文目录不会乱码
- * （不像走命令行传参还要过一遍代码页）。
+ * 位置列表视图的哨兵值。
  *
- * 第三参是 BIF_* 标志位，0x4000 = BIF_BROWSEINCLUDEFILES：
- * 让**文件**也出现在列表里，可以像点文件夹那样直接点中一张图。
+ * 为什么用哨兵而不是再加一个布尔量：视图状态只能有一处真相。render / 状态行 /
+ * 卡片点击全都只看 browseDir 一个地方；再开一个 placesMode，两个变量迟早不同步，
+ * 那时界面就会"显示着 A、操作的是 B"，而且查起来毫无头绪。
+ * \u0001 是控制字符，真实路径里不可能出现 —— 不会与任何目录名撞车。
+ */
+var PLACES = "\u0001places";
+
+/* 把 ActiveX 抛出的异常压成一行能进日志的文本。
+   这一步是被一次故障逼出来的：老的 catch 把"实例化 Shell.Application"和
+   "调用 BrowseForFolder"两件事包在一起，只报同一句"打不开选择框"。
+   于是同一个提示背后可能是两种完全不同的故障，而日志里一点线索都没有，
+   只能靠猜。自检能证明 SHELLAPP=OK（实例化没问题），但调用那一半仍是盲区。 */
+function errText(e) {
+  var n = "?", d = "?";
+  try { n = String(e.number); } catch (e1) { }
+  try { d = String(e.description || e.message || e); } catch (e2) { }
+  return "num=" + n + " desc=" + d;
+}
+
+/* 某个目录下的子目录。
+   隐藏 / 系统 / 以 $ 或 . 开头的全部滤掉 —— 用户翻图时看到 $RECYCLE.BIN
+   只会困惑，不会想点进去，而它又几乎出现在每个盘符根目录上。 */
+function listDirs(dir) {
+  var out = [];
+  try {
+    var f = fso();
+    if (!f.FolderExists(ntv(dir))) return out;
+    var e = new Enumerator(f.GetFolder(ntv(dir)).SubFolders);
+    for (; !e.atEnd(); e.moveNext()) {
+      var it = e.item();
+      var nm = String(it.Name);
+      var at = 0;
+      try { at = Number(it.Attributes); } catch (ea) { at = 0; }
+      if (at & 2) continue;                     /* Hidden */
+      if (at & 4) continue;                     /* System */
+      var c0 = nm.charAt(0);
+      if (c0 === "$" || c0 === ".") continue;
+      out.push({ name: nm, path: it.Path });
+    }
+  } catch (err) { }
+  out.sort(function (a, b) { return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0); });
+  return out;
+}
+
+/* 盘符的名字。DriveType 在某些驱动器上会抛错（未就绪、权限），
+   取不到就退回中性的"磁盘"—— 别让一个名字把整排快捷入口带崩。 */
+function driveLabel(d) {
+  var t = -1;
+  try { t = Number(d.DriveType); } catch (e) { t = -1; }
+  if (t === 1) return T.driveRemovable;
+  if (t === 2) return T.driveFixed;
+  if (t === 3) return T.driveNetwork;
+  if (t === 4) return T.driveCd;
+  return T.driveOther;
+}
+
+/* 这台机器上有哪些盘。取不到就返回空 —— 少一排快捷入口不影响使用，
+   用户仍然可以顺着记忆里的目录一路翻。 */
+function listDrives() {
+  var out = [];
+  try {
+    var e = new Enumerator(fso().Drives);
+    for (; !e.atEnd(); e.moveNext()) {
+      var d = e.item();
+      var rdy = false;
+      try { rdy = !!d.IsReady; } catch (e1) { rdy = false; }
+      /* 没放盘的光驱、断掉的网络盘：列出来只会点出错，不如不列 */
+      if (!rdy) continue;
+      var L = "";
+      try { L = String(d.DriveLetter); } catch (e2) { L = ""; }
+      if (!L) continue;
+      out.push({ name: driveLabel(d) + " (" + L + ":)", path: L + ":\\" });
+    }
+  } catch (err) { }
+  return out;
+}
+
+/* 用户目录下的三个标准位置。取不到就跳过 —— 它们只是快捷方式。 */
+function homeDirs() {
+  var out = [];
+  var home = "";
+  try { home = String(shl().ExpandEnvironmentStrings("%USERPROFILE%")); } catch (e) { home = ""; }
+  if (!home) return out;
+  var cand = [
+    [T.placePictures, home + "\\Pictures"],
+    [T.placeDesktop, home + "\\Desktop"],
+    [T.placeDownloads, home + "\\Downloads"]
+  ];
+  for (var i = 0; i < cand.length; i++) {
+    var ok = false;
+    try { ok = fso().FolderExists(ntv(cand[i][1])); } catch (e2) { ok = false; }
+    if (ok) out.push({ name: cand[i][0], path: cand[i][1] });
+  }
+  return out;
+}
+
+/* 位置列表：常用目录 + 各盘符 + 壁纸库。
+   壁纸库放最后 —— 底部按钮里已经有一个入口了，这里只是顺路带上。 */
+function placesList() {
+  var out = homeDirs();
+  var drv = listDrives();
+  for (var i = 0; i < drv.length; i++) out.push(drv[i]);
+  var libOk = false;
+  try { libOk = fso().FolderExists(ntv(WIN.lib)); } catch (e) { libOk = false; }
+  if (libOk) out.push({ name: T.placeLib, path: WIN.lib });
+  return out;
+}
+
+/* 上次挑过图的目录。文件没了、目录被删了、内容坏了 —— 一律当没有，
+   退回位置列表。起点猜错只是多翻一层，不该变成一个错误提示。 */
+function recallDir() {
+  var p = "";
+  try { p = trim(readTextUtf8(WIN.lastDir)); } catch (e) { p = ""; }
+  if (!p) return null;
+  var ok = false;
+  try { ok = fso().FolderExists(ntv(p)); } catch (e1) { ok = false; }
+  return ok ? p : null;
+}
+
+function rememberDir(p) {
+  if (!p || p === PLACES) return;
+  var ok = false;
+  try { ok = fso().FolderExists(ntv(p)); } catch (e) { ok = false; }
+  if (!ok) return;
+  try { writeAscii(WIN.lastDir, p); } catch (e1) { }
+}
+
+/* 上一级。到头了（盘符根）返回 null —— 那时该去位置列表，
+   而不是给一个点了不动的按钮。 */
+function dirUp(dir) {
+  if (!dir || dir === PLACES) return null;
+  var d = String(dir).replace(/\\+$/, "");
+  if (!d) return null;
+  var cut = d.lastIndexOf("\\");
+  if (cut < 0) return null;                        /* 已经是 "C:" 这种根 */
+  var up = d.slice(0, cut);
+  if (!up) return null;
+  if (/^[A-Za-z]:$/.test(up)) return null;         /* C: 的上面没有了 */
+  return up;
+}
+
+/* 状态行里的小按钮。位置在状态行说明它是"当前视图的操作"，
+   不属于底部动作区 —— 底部那排是换壁纸，这排是逛目录。 */
+function miniBtn(text, fn) {
+  var b = document.createElement("span");
+  b.className = "mini";
+  b.appendChild(document.createTextNode(text));
+  b.onclick = fn;
+  return b;
+}
+
+/* 文件夹 / 位置卡片。外壳和图片卡片完全一致（尺寸、hover、点击区都同），
+   只有中间那块"缩略图"换成画出来的文件夹形状 —— 用户不需要学第二套操作。 */
+function dirCard(item, isPlace) {
+  var c = document.createElement("div");
+  c.className = "card";
+  c.onclick = function () { goDir(item.path); };
+  var t = document.createElement("div");
+  t.className = "dthumb" + (isPlace ? " drive" : "");
+  t.title = item.path;
+  c.appendChild(t);
+  var nm = document.createElement("div");
+  nm.className = "nm";
+  nm.appendChild(document.createTextNode(item.name));
+  c.appendChild(nm);
+  var kd = document.createElement("div");
+  kd.className = "cur dirkind";
+  kd.appendChild(document.createTextNode(isPlace ? item.path : T.dirsLabel));
+  c.appendChild(kd);
+  return c;
+}
+
+/* 进入一个目录（或位置列表）。所有"换视图"的动作都走这里，
+   免得几个入口各自 rememberDir、各自 setStatus，行为迟早分叉。 */
+function goDir(p) {
+  browseDir = p;
+  rememberDir(p);
+  setStatus(p === PLACES ? T.placesNote : T.browseReady);
+  render();
+}
+
+/*
+ * 「选一张图…」的入口。
  *
- * 为什么要加它 —— 用户原话：「这里的逻辑能不能改为不要全选，我只需要选择
- * 喜欢的某一张作为背景即可」。在那之前这个入口只能选文件夹，光看标题
- * 「选一个装图片的文件夹」，谁都会以为「点确定 = 把整个文件夹交出去」。
- * 代码其实一直是「点哪张才收哪张」，可入口的名字在说另一件事。
- * 入口能直接点中一张图，这个疑虑从根上就没了。
+ * 它现在**不弹系统对话框**，而是把界面切进自己的图片浏览器 —— 因为系统
+ * 那个框给不了缩略图。详见 T 文案表里 placesTitle 上面那段说明。
  *
- * 有意**不加** BIF_NEWDIALOGSTYLE(0x40)：新式对话框会忽略
- * BIF_BROWSEINCLUDEFILES，那样就只剩文件夹可点。若某些系统仍然只给文件夹，
- * 下面的 dir 分支会照旧进浏览模式 —— 不会比改动前更差。
+ * 起点：上次挑过图的目录（挑图有强习惯性，八成还是那里）；
+ * 没有记忆就去位置列表，从盘符 / 图片 / 桌面里挑一个。
+ * 两条路都是缩略图网格，点进来就看得见图 —— 这是这一步的全部意义。
  */
 function pickFolder() {
+  var last = recallDir();
+  goDir(last ? last : PLACES);
+}
+
+/*
+ * 备用入口：Windows 自带的选文件夹对话框。
+ *
+ * 为什么还留着它：网络位置、最近访问、库这几类地方，自绘浏览器翻起来确实
+ * 不如系统对话框顺手。留一条备选，而不是把能力直接删掉。
+ *
+ * 为什么两段 try 分开写：上一位用户点它报了「打不开选择框」，而那句话背后
+ * 可能是"组件被策略拦了"或"调用没被接受"两种完全不同的故障。老写法把它们
+ * 包在一起，日志里只剩一个结果，查不下去。现在分别记错误码和描述。
+ */
+function pickByDialog() {
+  var sh = null;
+  try { sh = new ActiveXObject("Shell.Application"); }
+  catch (e0) {
+    slog("PICK_DIALOG_CREATE_FAIL " + errText(e0));
+    setStatus(T.dialogFail, false);
+    return;
+  }
   var fd = null;
-  try {
-    var sh = new ActiveXObject("Shell.Application");
-    fd = sh.BrowseForFolder(0, T.pickFolderTitle, 0x4000, 0);
-  } catch (e) {
-    setStatus(T.pickUnsupported, false);
+  try { fd = sh.BrowseForFolder(0, T.pickFolderTitle, 0x4000, 0); }
+  catch (e1) {
+    slog("PICK_DIALOG_CALL_FAIL " + errText(e1));
+    setStatus(T.dialogFail, false);
     return;
   }
   /* 返回 null = 用户点了取消，这不是错误 */
@@ -583,26 +833,10 @@ function pickFolder() {
   if (!p) { setStatus(T.pickFail, false); return; }
 
   var kind = pickedKind(p);
-
-  if (kind === "file") {
-    /* 直接点中了一张图 —— 这就是用户要的那一步，不绕去浏览别的目录。
-       清掉浏览位置：收完之后界面回到壁纸库，用户能立刻看见新加入的那张。 */
-    browseDir = null;
-    /* 来源目录按这张图的真实位置传进去。用户没"浏览"过它，
-       但结算文案里那句「那个目录里的 N 张原图一张都没动」必须说得出 ——
-       「会不会被全选进来」这个顾虑，就靠这句话消掉。 */
-    addAndUse(p, parentDir(p));
-    return;
-  }
+  if (kind === "file") { addAndUse(p, parentDir(p)); return; }
   if (kind === "bad") { setStatus(T.pickNotImage, false); return; }
-
-  /* 选中的是文件夹 —— 原有能力照旧：进去慢慢挑，点哪张才收哪张 */
-  browseDir = p;
-  /* 状态行不再重复「正在浏览：路径」（标题行已经给了这个信息）。
-     改成把「只是预览」再说一遍 —— 同屏几十张图摆在眼前时，
-     这是唯一能说清「一张都还没进来」的地方。 */
-  setStatus(T.browseReady);
-  render();
+  if (kind === "dir") { goDir(p); return; }
+  setStatus(T.pickFail, false);
 }
 
 function backToLib() { browseDir = null; render(); }
@@ -758,16 +992,27 @@ function cardFor(item, idx, st, mode, libIdx) {
 
 function render() {
   var st = readState();
-  var viewing = browseDir !== null;
-  var list = viewing ? listImages(browseDir) : listWallpapers();
+  var viewing = (browseDir !== null);
+  /* 浏览态分两种：位置列表（browseDir 是 PLACES 哨兵）和某个真实目录。
+     前者的网格里是"能去的地方"，后者是"文件夹 + 图片"。 */
+  var places = viewing && (browseDir === PLACES);
+  var list = places ? [] : (viewing ? listImages(browseDir) : listWallpapers());
+  var dirs = places ? placesList() : (viewing ? listDirs(browseDir) : []);
   /* 只读一次：浏览模式下要用它判断每张图「库里是不是已经有了」。
      放在循环外算，免得每张卡片都遍历一遍壁纸库目录。 */
-  var libIdx = viewing ? libIndex() : null;
+  var libIdx = (viewing && !places) ? libIndex() : null;
   var shown = list;
   var overflow = 0;
   if (viewing && list.length > BROWSE_MAX) {
     shown = list.slice(0, BROWSE_MAX);
     overflow = list.length - BROWSE_MAX;
+  }
+  /* 文件夹也要封顶。盘符根目录下几百个文件夹是常态，全渲染会把 HTA 卡死 */
+  var dirsShown = dirs;
+  var dirOver = 0;
+  if (dirs.length > DIR_MAX) {
+    dirsShown = dirs.slice(0, DIR_MAX);
+    dirOver = dirs.length - DIR_MAX;
   }
 
   el("ttl").innerHTML = "";
@@ -775,16 +1020,25 @@ function render() {
 
   var sub = el("sub");
   sub.innerHTML = "";
-  if (viewing) {
-    /* 浏览模式：把「在看哪个目录」和「怎么回去」都放在状态行上 */
+  if (places) {
+    /* 位置列表：这一屏本身就是"从这里开始"，没有上级可去 */
+    sub.appendChild(document.createTextNode(T.placesTitle));
+    sub.appendChild(span("browse-note", "　" + T.placesNote));
+    /* 备用入口只在这一屏给。它属于"我想到的地方这里没有"的兜底，
+       放在最外层（位置列表）语义最准，也不会把常用屏的按钮堆满。 */
+    sub.appendChild(miniBtn(T.dialogBtn, pickByDialog));
+    sub.appendChild(miniBtn(T.backToLib, backToLib));
+  } else if (viewing) {
+    /* 浏览某个目录：把「在看哪个目录」和「能去哪」都放在状态行上。
+       「上一级」到盘符根就没了，那时退回位置列表 —— 给一个点了不动的
+       按钮，比不给更让人困惑。 */
     sub.appendChild(document.createTextNode(T.browsing));
     sub.appendChild(span("v", browseDir));
     sub.appendChild(span("browse-note", T.browseNote));
-    var bBack = document.createElement("span");
-    bBack.className = "mini";
-    bBack.appendChild(document.createTextNode(T.backToLib));
-    bBack.onclick = backToLib;
-    sub.appendChild(bBack);
+    var upTo = dirUp(browseDir);
+    sub.appendChild(miniBtn(T.up, function () { goDir(upTo || PLACES); }));
+    sub.appendChild(miniBtn(T.changePlace, function () { goDir(PLACES); }));
+    sub.appendChild(miniBtn(T.backToLib, backToLib));
   } else {
     sub.appendChild(document.createTextNode(T.currentLabel));
     sub.appendChild(span("v", st.path ? st.path : T.themeBuiltin));
@@ -796,16 +1050,30 @@ function render() {
 
   var grid = el("grid");
   grid.innerHTML = "";
-  if (!shown.length) {
+  /* 文件夹排在图片前面：用户翻到一个目录，先要知道还能往哪走，
+     再看这里有什么图。同一屏里两类卡片混着排，顺序就是唯一的线索。 */
+  for (var di = 0; di < dirsShown.length; di++) {
+    grid.appendChild(dirCard(dirsShown[di], places));
+  }
+  if (!shown.length && !dirsShown.length) {
     var em = document.createElement("div");
     em.className = "empty";
-    em.appendChild(document.createTextNode(viewing ? T.browseEmpty1 : T.empty1));
+    em.appendChild(document.createTextNode(
+      places ? T.dirEmpty1 : (viewing ? T.browseEmpty1 : T.empty1)));
     em.appendChild(document.createElement("br"));
-    em.appendChild(document.createTextNode(viewing ? T.browseEmpty2 : T.empty2));
+    em.appendChild(document.createTextNode(
+      places ? T.dirEmpty2 : (viewing ? T.browseEmpty2 : T.empty2)));
     grid.appendChild(em);
   } else {
     for (var i = 0; i < shown.length; i++) {
       grid.appendChild(cardFor(shown[i], i + 1, st, viewing ? "browse" : "lib", libIdx));
+    }
+    if (dirOver > 0) {
+      var ovd = document.createElement("div");
+      ovd.className = "empty";
+      ovd.appendChild(document.createTextNode(
+        T.dirsOver1 + DIR_MAX + T.dirsOver2 + dirs.length + T.dirsOver3));
+      grid.appendChild(ovd);
     }
     /* 超出上限要说出来。默默只显示 60 张，用户会以为目录里就这么点图 */
     if (overflow > 0) {
@@ -1028,6 +1296,71 @@ function selfTest() {
     slog("PICK_KIND_BAD=" + (pickedKind(WIN.script) === "bad" ? 1 : 0));
     slog("PICK_KIND_NONE=" + (pickedKind("") === "none" ? 1 : 0));
 
+    /* ---- 「选一张图…」现在的真身：界面自带的图片浏览器 ----
+       系统对话框没有缩略图（XP 时代的控件），主路径换成了自绘网格。
+       自检点不了界面，但这条路的每一层数据都能跑一遍。
+       不覆盖等于没验证 —— 上一轮就是"改完没人验，用户先撞上"。 */
+    var dl = listDirs(WIN.root);
+    slog("DIRS_IN_ROOT=" + dl.length);
+    var hasTools = 0;
+    for (var qi = 0; qi < dl.length; qi++) {
+      if (dl[qi].name === "tools") hasTools = 1;
+    }
+    slog("DIRS_HAS_TOOLS=" + hasTools);
+    /* 隐藏 / 系统目录必须真的被滤掉。C:\\ 上这类目录最密集
+       （$RECYCLE.BIN、System Volume Information、Recovery…），直接拿它当输入。
+       复核按**属性位**来，不按名字前缀 —— 名字前缀只是额外一层网，
+       过滤逻辑的主体是 Attributes 的两条位，只查前缀测不到主体。
+       （这条断言原先就是这么写弱的：把 Hidden 判断改成 if(false)，
+        它照样报 1，等于没门禁 —— 是门禁破坏测试把它揪出来的。） */
+    var junk = 0;
+    try {
+      var dC = listDirs("C:\\");
+      for (var ri = 0; ri < dC.length; ri++) {
+        var rn = dC[ri].name.charAt(0);
+        if (rn === "$" || rn === ".") junk = 1;
+        /* 初值给 -1：属性都读不出来，说明这个目录不该被列出来，
+           判成失败而不是放过去。 */
+        var jat = -1;
+        try { jat = Number(fso().GetFolder(ntv(dC[ri].path)).Attributes); } catch (ej) { jat = -1; }
+        if (jat & 2) junk = 1;                    /* 藏着的漏进来了 */
+        if (jat & 4) junk = 1;                    /* 系统的漏进来了 */
+      }
+    } catch (er) { junk = -1; }
+    slog("DIRS_NO_JUNK=" + (junk === 0 ? 1 : 0));
+    var drvN = listDrives().length;
+    slog("DRIVES_COUNT=" + drvN);
+    slog("DRIVES_OK=" + (drvN >= 1 ? 1 : 0));
+    var plN = placesList().length;
+    slog("PLACES_LIST=" + plN);
+    slog("PLACES_OK=" + (plN >= 1 ? 1 : 0));
+    /* 哨兵值必须是真实路径里不可能出现的字符。否则某天有个目录真叫这个名字，
+       视图就会莫名其妙跳到位置列表去，而且现象极难复现。 */
+    slog("PLACES_SENTINEL=" + (PLACES.length > 1 && PLACES.charCodeAt(0) === 1 ? 1 : 0));
+    /* 上级导航的边界。盘符根必须返回 null —— 返回一个"看起来像路径"的值，
+       用户点「上一级」就会停在一个不存在的目录上，界面变空、像是坏了。 */
+    slog("UP_MIDDLE=" + (dirUp(WIN.root) === parentDir(WIN.root) ? 1 : 0));
+    slog("UP_TO_DRIVE=" + (dirUp("C:\\Users") === null ? 1 : 0));
+    slog("UP_AT_ROOT=" + (dirUp("C:\\") === null ? 1 : 0));
+    slog("UP_PLACES=" + (dirUp(PLACES) === null ? 1 : 0));
+    /* 起点记忆：写进去读出来必须是同一条；指向不存在的目录时必须当没有
+       （否则一点「选一张图…」就跳进空目录，用户会以为图没了）。 */
+    var memOk = 0;
+    try {
+      rememberDir(WIN.lib);
+      memOk = (recallDir() === WIN.lib) ? 1 : 0;
+    } catch (em) { memOk = 0; }
+    slog("LAST_DIR_ROUNDTRIP=" + memOk);
+    var ghost = null;
+    try {
+      var saveTxt = "";
+      try { saveTxt = readTextUtf8(WIN.lastDir); } catch (eg1) { saveTxt = ""; }
+      writeAscii(WIN.lastDir, "Z:\\no-such-dir-at-all");
+      ghost = recallDir();
+      writeAscii(WIN.lastDir, saveTxt);
+    } catch (eg2) { ghost = "?err"; }
+    slog("LAST_DIR_GHOST=" + (ghost === null ? 1 : 0));
+
     // 浏览模式的渲染路径也要跑一遍。这段代码不点按钮就永远走不到，
     // 而它恰恰是本轮新功能的主体 —— 不覆盖等于没验证。
     // 用壁纸库自己当"被浏览的目录"：卡片数应保持 2，且出现「返回壁纸库」。
@@ -1048,7 +1381,31 @@ function selfTest() {
     }
     slog("BROWSE_CARDS=" + nCard2);
     slog("BROWSE_INLIB_MARKS=" + nMark2);
-    slog("BROWSE_BACK_BTN=" + nBack);
+    /* 浏览一个目录时，状态行必须给出三个导航口：上一级 / 换个位置 / 返回壁纸库。
+       少任何一个，用户都会在某一层"出不去"—— 而自绘浏览器的全部风险就在这里：
+       它没有系统对话框的侧边栏，出路只能靠自己给。 */
+    slog("BROWSE_NAV_BTNS=" + nBack);
+    /* 再跑一遍"只有子目录、没有图片"的那种目录 —— 这是用户第一次用时的
+       最常见一屏（从盘符点进去，还没翻到有图的那一层）。
+       图片卡片那一路上面已经覆盖过了，这里专门盯目录卡片：
+       画出来没有、有没有「文件夹」标签、有没有被错标成"位置"。 */
+    browseDir = WIN.root;
+    render();
+    var dvR = document.getElementsByTagName("div"), nCardR = 0, nDirR = 0, nLblR = 0, nDrvR = 0;
+    for (var wi = 0; wi < dvR.length; wi++) {
+      var cnR = String(dvR[wi].className || "");
+      if (cnR.indexOf("card") === 0) nCardR++;
+      if (cnR.indexOf("dthumb") === 0) nDirR++;
+      if (cnR.indexOf("dthumb drive") === 0) nDrvR++;
+      if (cnR.indexOf("cur dirkind") === 0) nLblR++;
+    }
+    slog("ROOTVIEW_DIRS=" + nDirR);
+    slog("ROOTVIEW_CARDS=" + nCardR);
+    slog("ROOTVIEW_DIROLBL=" + (nDirR > 0 && nLblR === nDirR && nDrvR === 0 ? 1 : 0));
+    /* 恢复成"浏览壁纸库"再往下走：紧接着的几条断言读的是状态行文字，
+       状态必须回到它们用的那一屏，否则测的就不是同一件事了。 */
+    browseDir = WIN.lib;
+    render();
     // 浏览模式的提示语里必须真的有「预览」二字，且「返回壁纸库」要给得出来。
     // 这两条是「以为全选进来了」那类困惑的止血点，改文案时删掉了就得报出来。
     var subTxt = "";
@@ -1056,6 +1413,31 @@ function selfTest() {
     slog("BROWSE_HINT_LEN=" + subTxt.length);
     slog("BROWSE_HINT_PREVIEW=" + (subTxt.indexOf(T.browseNote) >= 0 ? 1 : 0));
     slog("BROWSE_HINT_BACK=" + (subTxt.indexOf(T.backToLib) >= 0 ? 1 : 0));
+    /* 位置列表也要真的画出来。它是"第一屏"—— 没有记忆时用户看到的就是它，
+       画不出来等于「选一张图…」点了没反应。 */
+    browseDir = PLACES;
+    render();
+    var dv3 = document.getElementsByTagName("div"), nCard3 = 0, nDthumb = 0;
+    for (var zi = 0; zi < dv3.length; zi++) {
+      var cn3 = String(dv3[zi].className || "");
+      if (cn3.indexOf("card") === 0) nCard3++;
+      if (cn3.indexOf("dthumb") === 0) nDthumb++;
+    }
+    slog("PLACES_CARDS=" + nCard3);
+    slog("PLACES_DTHUMB=" + nDthumb);
+    slog("PLACES_CARDS_EQ=" + (nCard3 === placesList().length && nCard3 > 0 ? 1 : 0));
+    /* 位置卡片必须带着真实路径，不能是空串 —— 点下去进不去，
+       比不给这个入口更糟。 */
+    var plAll = placesList(), plPathOk = plAll.length ? 1 : 0;
+    for (var yi = 0; yi < plAll.length; yi++) {
+      if (!plAll[yi].path) plPathOk = 0;
+    }
+    slog("PLACES_PATH_OK=" + plPathOk);
+    /* 第一屏不许出现「上一级」：它本身没有上一层，给了就是个死按钮。 */
+    var subTxt2 = "";
+    try { subTxt2 = String(el("sub").innerText || ""); } catch (e11) { }
+    slog("PLACES_NO_UP=" + (subTxt2.indexOf(T.up) < 0 ? 1 : 0));
+    slog("PLACES_HAS_DIALOG=" + (subTxt2.indexOf(T.dialogBtn) >= 0 ? 1 : 0));
     browseDir = null;
     render();
     // 结算文案：必须同时说清「收的是哪一张」「壁纸库共几张（旧的一张没动）」「原目录几张未动」。

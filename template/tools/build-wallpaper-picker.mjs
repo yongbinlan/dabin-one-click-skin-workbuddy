@@ -248,6 +248,22 @@ if (undefKeys.length) {
     undefKeys.map((k) => `WIN.${k} —— WIN 对象里没有这个键，运行时会变成 undefined`));
 }
 
+// 3c-2. 反向检查：主入口不许再走系统对话框
+//   这一条的检查方向和其他都相反 —— 它盯的是"某段代码里不该出现什么"。
+//   为什么值得单独加：系统对话框没有缩略图，用户看得见文件名、看不见图，
+//   这正是它被换掉的原因。哪天有人觉得"用系统的更省事"把它改回去，
+//   用户的"看不见图"就会原样复发，而正向断言一条都不会响。
+const fnPick = /function pickFolder\(\) \{([\s\S]*?)\n\}/.exec(out);
+if (!fnPick) fail("产物里找不到 pickFolder，界面上的主按钮会点了没反应");
+if (/BrowseForFolder/.test(fnPick[1])) {
+  fail("「选一张图…」又被改回系统对话框了", [
+    "SHBrowseForFolder 是 XP 时代的控件，没有缩略图 ——",
+    "用户只能看见文件名，看不见图。而挑壁纸恰恰是「看图」的活。",
+    "要恢复系统对话框，请放回备用入口 pickByDialog（位置列表那一屏有它的按钮），",
+    "主入口必须留在界面自己的缩略图网格里。",
+  ]);
+}
+
 // 3d. 关键路径真存在吗 —— 界面点了却换不了壁纸比打不开更糟
 const paths = [
   ["壁纸库目录", path.join(ROOT, "wallpapers")],
@@ -388,6 +404,34 @@ if (process.argv.includes("--selftest")) {
     SETTLE_OK: "1",
     SETTLE_NODIR_TAIL_OK: "1",
     PARENT_DIR: "1",
+    /* ---- 「选一张图…」= 界面自带的图片浏览器（本轮换的主路径）----
+       换它的原因：系统对话框（SHBrowseForFolder）是 XP 时代的控件，没有缩略图，
+       用户看得见文件名、看不见图。这条路能成立的前提是四件事：列得出目录、
+       列得出盘符、上得去、起点记得住。每件一条断言。
+       （这些断言原先只在 HTA 里跑、没有进这张表 —— 等于没有门禁。） */
+    DIRS_HAS_TOOLS: "1",
+    DIRS_NO_JUNK: "1",
+    DRIVES_OK: "1",
+    PLACES_OK: "1",
+    PLACES_SENTINEL: "1",
+    PLACES_CARDS_EQ: "1",
+    PLACES_PATH_OK: "1",
+    PLACES_NO_UP: "1",
+    PLACES_HAS_DIALOG: "1",
+    UP_MIDDLE: "1",
+    UP_TO_DRIVE: "1",
+    UP_AT_ROOT: "1",
+    UP_PLACES: "1",
+    LAST_DIR_ROUNDTRIP: "1",
+    LAST_DIR_GHOST: "1",
+    /* 浏览一个目录时状态行必须给出三个出路：上一级 / 换个位置 / 返回壁纸库。
+       自绘浏览器没有系统对话框那种侧边栏，"走到某一层出不去"是它最大的风险，
+       所以把导航口的条数本身写成门禁。改导航时记得同步这个数。 */
+    BROWSE_NAV_BTNS: "3",
+    /* 首屏最常见的那一屏：只有子文件夹、一张图都没有的目录。
+       它同时盖住两件事 —— "目录卡片真的画出来了"（数量与标签数对得上）
+       和"没被错标成位置"（dthumb drive 那个蓝色变体不能串到这里）。 */
+    ROOTVIEW_DIROLBL: "1",
     ALL: "DONE",
   };
   for (const [k, want] of Object.entries(need)) {
@@ -400,8 +444,17 @@ if (process.argv.includes("--selftest")) {
   if (nCard !== nWp) problems.push(`DOM_CARD_COUNT=${nCard} 与 WALLPAPER_COUNT=${nWp} 不一致 —— 界面没把每张壁纸都画出来`);
   if (!(Number(get("DOM_GRID_LEN")) >= 50)) problems.push(`DOM_GRID_LEN=${get("DOM_GRID_LEN")}，卡片区域几乎是空的`);
   if (!(Number(get("LIST_CMD_OUT_BYTES")) >= 50)) problems.push(`LIST_CMD_OUT_BYTES=${get("LIST_CMD_OUT_BYTES")}，命令没有真实输出`);
+  // 浏览器那条路的数值门槛。用区间而不是定值：子目录数、位置数会随机器变，
+  // 写成定值会让门禁在换台机器时误报 —— 门禁误报比没有门禁更快被无视。
+  if (!(Number(get("DIRS_IN_ROOT")) >= 1)) problems.push(`DIRS_IN_ROOT=${get("DIRS_IN_ROOT")}，一个子目录都列不出来（工程根下明明有一堆）`);
+  if (!(Number(get("ROOTVIEW_DIRS")) >= 1)) problems.push(`ROOTVIEW_DIRS=${get("ROOTVIEW_DIRS")}，只有子目录的那种目录里一个文件夹卡片都没画出来`);
+  if (!(Number(get("DRIVES_COUNT")) >= 1)) problems.push(`DRIVES_COUNT=${get("DRIVES_COUNT")}，一个盘符都没列出来 —— 位置列表会缺一整排入口`);
+  const nPlCard = Number(get("PLACES_CARDS"));
+  const nPlTh = Number(get("PLACES_DTHUMB"));
+  if (!(nPlCard >= 1)) problems.push(`PLACES_CARDS=${get("PLACES_CARDS")}，位置列表一张卡片都没画出来（第一屏会是空的）`);
+  if (nPlCard !== nPlTh) problems.push(`位置卡片 ${nPlCard} 张，但文件夹图形只有 ${nPlTh} 个 —— 有卡片没画出中间那块缩略图位`);
 
   console.log("");
   if (problems.length) fail("自检未通过", problems);
-  console.log(`✅ 自检通过：${Object.keys(need).length} 项断言 + 4 项数值一致性校验`);
+  console.log(`✅ 自检通过：${Object.keys(need).length} 项断言 + 9 项数值一致性校验`);
 }
