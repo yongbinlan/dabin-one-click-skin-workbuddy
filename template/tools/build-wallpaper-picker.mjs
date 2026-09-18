@@ -375,6 +375,19 @@ if (process.argv.includes("--selftest")) {
     STATE_MISSING: "0",
     STATE_IN_LIST: "1",
     DOM_ON_COUNT: "1",
+    // 主按钮 = 「选一张图…」那条路的闸门。入口语义错了，功能再对也白搭，
+    // 所以这里既断文案、也断判定分支的四种输入。
+    PICK_BTN_LABEL: "1",
+    PICK_KIND_FILE: "1",
+    PICK_KIND_DIR: "1",
+    PICK_KIND_BAD: "1",
+    PICK_KIND_NONE: "1",
+    // 结算文案的两个收尾：有来源目录时「其他图一张没动」那句必须在；
+    // 没有来源目录时，也不能留个悬空的分号。
+    // （SETTLE_OK 原先只写在日志里、从没进过断言表 —— 等于没门禁，一并补上。）
+    SETTLE_OK: "1",
+    SETTLE_NODIR_TAIL_OK: "1",
+    PARENT_DIR: "1",
     ALL: "DONE",
   };
   for (const [k, want] of Object.entries(need)) {

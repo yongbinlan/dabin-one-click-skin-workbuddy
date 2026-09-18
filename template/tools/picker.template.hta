@@ -96,7 +96,7 @@
   .btn:hover { border-color:#4a5266; }
   .btn.on { border-color:#e0b45c; color:#e0b45c; background:#242938; }
   .btn.ghost { float:right; margin-right:0; margin-left:8px; color:#8b93a3; }
-  /* 主按钮：金色描边。「浏览文件夹…」是解决「选了图没反应」的那条新路径，
+  /* 主按钮：金色描边。「选一张图…」是解决「选了图没反应」的那条路径，
      得让人一眼看见，不能和刷新/关闭同权重。 */
   .btn.primary { border-color:#e0b45c; color:#e0b45c; }
   .btn.primary:hover { background:#2a3040; }
@@ -208,9 +208,9 @@ var T = {
   missingNote: "（记录的图片文件已不存在，界面会回落到主题自带壁纸）",
   disabledNote: "（皮肤层已关闭）",
   empty1: "壁纸库是空的。",
-  empty2: "点下面的「浏览文件夹…」挑一个装图片的文件夹，或把图片直接拖进本窗口。",
+  empty2: "点下面的「选一张图…」直接挑一张换上，或把图片直接拖进本窗口。",
   openLib: "打开壁纸库",
-  openLibTip: "在资源管理器里打开壁纸库目录（只是打开文件夹，不会自动换壁纸）。要加图请用「浏览文件夹…」，或把图片直接拖进本窗口。",
+  openLibTip: "在资源管理器里打开壁纸库目录（只是打开文件夹，不会自动换壁纸）。要加图请用「选一张图…」，或把图片直接拖进本窗口。",
   refresh: "刷新",
   closeWin: "关闭",
   switching: "正在切换，请稍候…",
@@ -226,19 +226,28 @@ var T = {
   light: "淡", medium: "中", strong: "浓",
   presetName: { light: "淡", medium: "中", strong: "浓" },
 
-  // ---- 换外部图片（本轮新增）：把「选图」这件事从四步压成一步 ----
+  // ---- 换外部图片：把「选图」这件事从四步压成一步 ----
   // 之前只有「打开壁纸库」一条路，而它只是打开文件夹 —— 用户在资源管理器里
   // 选了一张图，界面当然毫无反应。这组文案专门把两条真路径说清楚。
-  pickFolder: "浏览文件夹…",
-  pickFolderTitle: "选一个装图片的文件夹：里面的图只列出来供你挑，点哪张才换哪张",
-  pickCanceled: "没有选择文件夹，未做任何改动。",
-  pickFail: "没能读到所选文件夹的路径，请在资源管理器里打开它再试。",
-  pickUnsupported: "这台机器上打不开文件夹选择框。请改用「打开壁纸库」，或把图片直接拖进本窗口。",
+  //
+  // 2026-09-18 又改一次：入口从「浏览文件夹…」正名为「选一张图…」。
+  // 用户看着「选一个装图片的文件夹」问：「能不能不要全选，我只需要选喜欢的
+  // 某一张」。代码一直是「点哪张才收哪张」，可入口的名字在说另一件事 ——
+  // 靠状态栏反复解释没用，那句话已经写在那儿很久了。
+  // 名字改对 + 能直接点中一张图，这个疑虑才算真正消掉。
+  pickFolder: "选一张图…",
+  pickFolderTitle: "选一张图片直接换上；也可以选一个文件夹，进去慢慢挑",
+  pickCanceled: "没有选择，未做任何改动。",
+  pickFail: "没能读到所选路径，请在资源管理器里打开它再试。",
+  pickUnsupported: "这台机器上打不开选择框。请改用「打开壁纸库」，或把图片直接拖进本窗口。",
+  pickNotImage: "选中的不是图片文件。支持 jpg / jpeg / png / webp / gif / bmp / avif。",
   browsing: "正在浏览：",
   browseReady: "已列出下面这些图 —— 它们只是预览，一张都还没进壁纸库。点哪张，才收哪张。",
-  /* 「这里只是预览」必须写在最显眼的地方。用户点「浏览文件夹…」之后，
+  /* 「这里只是预览」必须写在最显眼的地方。用户选了文件夹之后，
      界面上一下子多出几十张图，不给这句话，直觉就是「全都被加进来了」。
-     实际上一张都还没进壁纸库 —— 点哪张，才收哪张。 */
+     实际上一张都还没进壁纸库 —— 点哪张，才收哪张。
+     （入口已能直接点中一张图，走这条文件夹分支的人少多了；
+     但只要还是多张图同屏，这句话就不能删。） */
   browseNote: "　下面列出的都只是预览，还没进壁纸库 —— 点哪张，才收哪张进去",
   backToLib: "返回壁纸库",
   browseOver1: "这个文件夹里的图片超过 ",
@@ -425,7 +434,14 @@ function settleText(p, srcDir, total, n) {
     base = parts[parts.length - 1];
   } catch (e0) { }
   var s = T.settle1 + base + T.settle2 + n + T.settle3;
-  if (srcDir && total) s += srcDir + T.settle4 + total + T.settle5;
+  if (srcDir && total) {
+    s += srcDir + T.settle4 + total + T.settle5;
+  } else {
+    /* 没有来源目录可报（例如「直接选一张图」时反推不出目录）：
+       把那个以「；」结尾的收成「。」—— 否则文案留个悬空的分号，
+       读起来像"还有下文"，实际已经没有了。 */
+    s = s.replace(/；\s*$/, "。");
+  }
   return s;
 }
 
@@ -517,16 +533,45 @@ function extractDropPath(e) {
 }
 
 /*
- * 挑一个文件夹来选图。
+ * 判定「选中的这条路径」到底是什么：一张图 / 一个文件夹 / 别的东西。
+ *
+ * 单独抽出来，是为了让自检能直接断言这几种输入 —— pickFolder 要弹系统对话框，
+ * 自检点不了它，而这段判定正是整条路上唯一会分叉的地方，不覆盖等于没验证。
+ */
+function pickedKind(p) {
+  if (!p) return "none";
+  var isDir = false;
+  try { isDir = fso().FolderExists(ntv(p)); } catch (e) { isDir = false; }
+  if (isDir) return "dir";
+  var isFile = false;
+  try { isFile = fso().FileExists(ntv(p)); } catch (e2) { isFile = false; }
+  if (isFile && IMG_RE.test(p)) return "file";
+  return "bad";
+}
+
+/*
+ * 选一张图（也可以选一个文件夹，进去慢慢挑）。
  * 用系统自带的 BrowseForFolder，它返回的路径是 Unicode，中文目录不会乱码
- * （不像走命令行传参还要过一遍代码页）。选完把整个目录的图画在网格里，
- * 点哪张就换哪张 —— 比"打开文件夹→自己复制→回来刷新→再点卡片"少三步。
+ * （不像走命令行传参还要过一遍代码页）。
+ *
+ * 第三参是 BIF_* 标志位，0x4000 = BIF_BROWSEINCLUDEFILES：
+ * 让**文件**也出现在列表里，可以像点文件夹那样直接点中一张图。
+ *
+ * 为什么要加它 —— 用户原话：「这里的逻辑能不能改为不要全选，我只需要选择
+ * 喜欢的某一张作为背景即可」。在那之前这个入口只能选文件夹，光看标题
+ * 「选一个装图片的文件夹」，谁都会以为「点确定 = 把整个文件夹交出去」。
+ * 代码其实一直是「点哪张才收哪张」，可入口的名字在说另一件事。
+ * 入口能直接点中一张图，这个疑虑从根上就没了。
+ *
+ * 有意**不加** BIF_NEWDIALOGSTYLE(0x40)：新式对话框会忽略
+ * BIF_BROWSEINCLUDEFILES，那样就只剩文件夹可点。若某些系统仍然只给文件夹，
+ * 下面的 dir 分支会照旧进浏览模式 —— 不会比改动前更差。
  */
 function pickFolder() {
   var fd = null;
   try {
     var sh = new ActiveXObject("Shell.Application");
-    fd = sh.BrowseForFolder(0, T.pickFolderTitle, 0, 0);
+    fd = sh.BrowseForFolder(0, T.pickFolderTitle, 0x4000, 0);
   } catch (e) {
     setStatus(T.pickUnsupported, false);
     return;
@@ -536,10 +581,26 @@ function pickFolder() {
   var p = null;
   try { p = String(fd.Self.Path); } catch (e2) { p = null; }
   if (!p) { setStatus(T.pickFail, false); return; }
+
+  var kind = pickedKind(p);
+
+  if (kind === "file") {
+    /* 直接点中了一张图 —— 这就是用户要的那一步，不绕去浏览别的目录。
+       清掉浏览位置：收完之后界面回到壁纸库，用户能立刻看见新加入的那张。 */
+    browseDir = null;
+    /* 来源目录按这张图的真实位置传进去。用户没"浏览"过它，
+       但结算文案里那句「那个目录里的 N 张原图一张都没动」必须说得出 ——
+       「会不会被全选进来」这个顾虑，就靠这句话消掉。 */
+    addAndUse(p, parentDir(p));
+    return;
+  }
+  if (kind === "bad") { setStatus(T.pickNotImage, false); return; }
+
+  /* 选中的是文件夹 —— 原有能力照旧：进去慢慢挑，点哪张才收哪张 */
   browseDir = p;
   /* 状态行不再重复「正在浏览：路径」（标题行已经给了这个信息）。
-     改成把「只是预览」再说一遍 —— 这个误解值得说三遍，
-     它正是用户以为「整个目录都被加进来了」的根源。 */
+     改成把「只是预览」再说一遍 —— 同屏几十张图摆在眼前时，
+     这是唯一能说清「一张都还没进来」的地方。 */
   setStatus(T.browseReady);
   render();
 }
@@ -555,10 +616,13 @@ function backToLib() { browseDir = null; render(); }
  * 「我的图被删了」。留在原地就好：那张图会自己带上「已收进库 · 正在使用」
  * 的标记，其余图原样都在；想看壁纸库，点一下「返回壁纸库」即可。
  */
-function addAndUse(p) {
+function addAndUse(p, srcDirOverride) {
   if (nodeMissing()) { setStatus(T.noNode, false); return; }
-  /* 记下是在哪个目录里点的 —— 结算文案要报出「那里有几张原图没被动过」 */
-  var srcDir = browseDir;
+  /* 记下这张图是从哪个目录来的 —— 结算文案要报出「那里有几张原图没被动过」。
+     缺省用当前浏览的目录（用户是在浏览视图里点的卡片）；
+     「直接选中一张图」那条路会显式传进来：那时用户并没在浏览任何目录，
+     可这句话恰恰是「会不会把整个文件夹都收进来」这个顾虑的解药，不能省。 */
+  var srcDir = (srcDirOverride === undefined) ? browseDir : srcDirOverride;
   var total = srcDir ? listImages(srcDir).length : 0;
   setStatus(T.adding);
   window.setTimeout(function () {
@@ -769,7 +833,7 @@ function render() {
   var act = el("actions");
   act.innerHTML = "";
   /* .btn.ghost 是 float:right，所以先 append 的靠右。
-     视觉上从左到右依次是：浏览文件夹… / 刷新 / 打开壁纸库 / 关闭 */
+     视觉上从左到右依次是：选一张图… / 刷新 / 打开壁纸库 / 关闭 */
   var bClose = document.createElement("span");
   bClose.className = "btn ghost";
   bClose.appendChild(document.createTextNode(T.closeWin));
@@ -791,7 +855,9 @@ function render() {
   bRe.onclick = render;
   act.appendChild(bRe);
 
-  /* 本轮新增的主按钮：挑文件夹 → 列出里面的图 → 点哪张换哪张，一步到位 */
+  /* 主按钮：选中一张图 → 直接换上，一步到位。
+     名字必须直说「选一张图」—— 它原来叫「浏览文件夹…」，用户看了就问
+     「能不能不要全选」。入口语义错了，功能再对也白搭。 */
   var bPick = document.createElement("span");
   bPick.className = "btn primary";
   bPick.appendChild(document.createTextNode(T.pickFolder));
@@ -900,9 +966,9 @@ function selfTest() {
     slog("LIST_CMD_RC=" + runCmd(quote(WIN.node) + " " + quote(WIN.script) + " list"));
     slog("LIST_CMD_OUT_BYTES=" + readAll(RUN_TXT).length);
 
-    // ---- 本轮新增能力的地基（「浏览文件夹…」和拖图都靠它们）----
+    // ---- 「选一张图…」和拖图都靠它们 ----
     // 自检要cover住新路径，否则下次改坏了自己都不知道。
-    // Shell.Application 是「浏览文件夹…」的前提
+    // Shell.Application 是「选一张图…」的前提
     try { new ActiveXObject("Shell.Application"); slog("SHELLAPP=OK"); }
     catch (e6) { slog("SHELLAPP=FAIL"); }
     // 能不能列任意目录的图（不只是壁纸库那一个目录）
@@ -936,7 +1002,7 @@ function selfTest() {
       if (String(all[oi].className || "").indexOf("card on") === 0) nOn++;
     }
     slog("DOM_ON_COUNT=" + nOn);
-    // 新增的「浏览文件夹…」按钮必须真的渲染出来。
+    // 主按钮必须真的渲染出来。
     // 这条不走截图 —— 截图会被残留窗口干扰（截到旧界面，看着像按钮没渲染），
     // 而这条断言直接查 DOM，不受影响，是「按钮在」最直接的证据。
     var sps = document.getElementsByTagName("span"), nPick = 0;
@@ -944,6 +1010,23 @@ function selfTest() {
       if (String(sps[pi].className || "").indexOf("btn primary") >= 0) nPick++;
     }
     slog("DOM_PICK_BTN=" + nPick);
+
+    /* ---- 「选一张图…」这条路：入口改对了没有 ----
+       主按钮的名字必须真的写着「选一张图…」。它原来叫「浏览文件夹…」，
+       用户看了就问「能不能不要全选」—— 入口语义错了，功能再对也白搭，
+       所以这条按**文案**断言，不按功能断言。
+       （以后改这句话时，记得同步改这里 —— 它故意是硬编码的，
+        就是为了让「有人把入口名字改回去」这件事立刻报出来。） */
+    slog("PICK_BTN_LABEL=" + (T.pickFolder === "选一张图…" ? 1 : 0));
+    /* 判定分支四路全覆盖。pickFolder 本身要弹窗、自检点不了，
+       所以把整条路上唯一会分叉的判定抽成了 pickedKind()，这里逐路断言。
+       输入全是真实存在的路径：库里的一张图 / 壁纸库目录 / 一个 .mjs 脚本。 */
+    var pkFile = 0;
+    if (list.length) pkFile = pickedKind(WIN.lib + "\\" + list[0].name);
+    slog("PICK_KIND_FILE=" + (pkFile === "file" ? 1 : 0));
+    slog("PICK_KIND_DIR=" + (pickedKind(WIN.lib) === "dir" ? 1 : 0));
+    slog("PICK_KIND_BAD=" + (pickedKind(WIN.script) === "bad" ? 1 : 0));
+    slog("PICK_KIND_NONE=" + (pickedKind("") === "none" ? 1 : 0));
 
     // 浏览模式的渲染路径也要跑一遍。这段代码不点按钮就永远走不到，
     // 而它恰恰是本轮新功能的主体 —— 不覆盖等于没验证。
@@ -986,6 +1069,16 @@ function selfTest() {
     if (stTxt.indexOf("D:/src") < 0) settleOk = 0;        // 原目录路径
     if (stTxt.indexOf("47") < 0) settleOk = 0;            // 原目录张数
     slog("SETTLE_OK=" + settleOk);
+    /* 「直接选中一张图」那条路：万一 parentDir 反推不出目录，
+       结算文案就会以「；」悬在那儿（后半截没跟上来）。
+       两种收尾都断言到 —— 有目录说要紧的那句，没目录要收得住。 */
+    var stNoDir = settleText("D:/src/壁纸.jpg", null, 0, 3);
+    slog("SETTLE_NODIR_TAIL_OK=" + (stNoDir.charAt(stNoDir.length - 1) === "。" ? 1 : 0));
+    /* parentDir 必须能从一张图的完整路径切出它所在目录 —— 直接选图靠它报来源目录。
+       拿壁纸库里真实的第一张当输入，不手写路径（省得跟反斜杠转义较劲）。 */
+    var pdOk = 0;
+    if (list.length) pdOk = (parentDir(list[0].path) === WIN.lib) ? 1 : 0;
+    slog("PARENT_DIR=" + pdOk);
     var ttl = "";
     try { ttl = String(el("ttl").innerText || ""); } catch (e4) { }
     slog("DOM_TITLE_LEN=" + ttl.length);
