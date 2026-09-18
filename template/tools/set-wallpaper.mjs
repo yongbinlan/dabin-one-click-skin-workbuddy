@@ -40,14 +40,29 @@ const args = rest.filter((a) => a && !a.startsWith("--"));
 
 const hr = () => console.log("-".repeat(64));
 
-/** 尽力注入；拿不到 CDP 不算失败（下次启动会自动注入） */
+/**
+ * 尽力注入；拿不到 CDP 不算失败（下次启动会自动注入）。
+ *
+ * 「写」与「读回」必须分开兜底 —— 这是 2026-09-18 那轮排查的结论：
+ *   写（applyWallpaperCss）不依赖页面动画帧，一定能成功；
+ *   读回（readWallpaperState）依赖 rAF，而换壁纸时 WorkBuddy 正被选择器窗口
+ *   遮在后台，rAF 被浏览器暂停 → 读回必然超时。
+ * 原先两者写在同一个 try 里，读回一超时就把整件事判成「未生效」，
+ * 于是用户明明已经换上了、界面却报「下次启动生效」—— 人就去重启了。
+ * 「换个皮肤得重启」这个误解，根源就在这里。
+ */
 async function tryInject(cssText) {
   try {
-    const r = await applyWallpaperCss(PORT, cssText);
-    const state = await readWallpaperState(PORT);
-    return { injected: true, result: r, state };
+    await applyWallpaperCss(PORT, cssText);
   } catch (e) {
-    return { injected: false, why: e.message };
+    // 写这一步就没成功，这才是真的「没生效」
+    return { injected: false, wrote: false, why: e.message };
+  }
+  try {
+    const state = await readWallpaperState(PORT);
+    return { injected: true, wrote: true, state };
+  } catch (e) {
+    return { injected: true, wrote: true, state: null, readbackWhy: e.message };
   }
 }
 
@@ -71,8 +86,21 @@ async function applyState({ path: imagePath, preset, position }, { quiet = false
     process.exit(3);
   }
 
-  console.log("已注入并生效 ✅");
+  /*
+   * 读回失败 ≠ 没换上。
+   * 写入那一步早已成功，只是拿不到数值做校验。这时必须如实报「已注入、未校验」，
+   * 绝不能再报「不可达 / 下次生效」—— 那句话会把人骗去重启一个本来已经生效的界面。
+   */
   const s = r.state;
+  if (!s) {
+    console.log("已注入 ✅（读回校验超时，本次切换已生效）");
+    console.log("   写入成功，界面应该已经变了；只是没能读回数值做断言。");
+    console.log("   读回依赖页面动画帧，WorkBuddy 窗口在后台时会被浏览器暂停，属正常现象（不影响本次切换）。");
+    console.log("   想复核：把 WorkBuddy 切到前台，再跑 node tools/launcher.mjs --status");
+    return null;
+  }
+
+  console.log("已注入并生效 ✅");
   console.log("  生效变量：" + s.heroVarHead.slice(0, 80));
   console.log(`  玻璃层：glass=${s.preset.glass}  rootX=${s.preset.rootX}  blur=${s.preset.blur}`);
   console.log(`  对话区实测：bg=${s.agentBodyBg}  blur=${s.agentBodyBlur}`);

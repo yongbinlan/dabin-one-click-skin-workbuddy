@@ -226,9 +226,27 @@ export async function removeWallpaperLayer(port) {
 /** 读回当前实际生效的皮肤层状态（用于自检，而不是靠"注入返回 true"当证据） */
 export async function readWallpaperState(port) {
   return await evaluate(port, `(async () => {
-    // 必须等两帧：同一同步任务里连续读写 DOM，浏览器来不及重算样式，
-    // 之前就是因此得到过"变量为空"的假警报。
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    /*
+     * 等样式重算后再读。
+     *
+     * 原实现只写「等两帧 rAF」，理由是同一同步任务里连续读写 DOM 来不及重算。
+     * 但 rAF 在页面不可见时会被浏览器完全暂停 —— 而「换壁纸」这个动作发生时，
+     * WorkBuddy 恰好被选择器窗口遮在后台，正是 hidden 状态。
+     *
+     * 后果（2026-09-18 实测）：这个 Promise 永不 resolve → 25 秒后抛
+     * timeout:Runtime.evaluate → 被 set-wallpaper.mjs 误报成「CDP 不可达，
+     * 下次启动生效」。而壁纸其实已经换成功了，用户看到「没生效」就去重启 ——
+     * 「换个皮肤得重启」这个印象就是这么来的。
+     *
+     * 实测同一时刻：document.hidden=true、rAF 4.4 秒零回调，
+     * 而同步 getComputedStyle 读到的值完全正确。
+     *
+     * 所以给 rAF 加 400ms 兜底：可见时仍走两帧（精确），不可见时也能落地。
+     */
+    await Promise.race([
+      new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),
+      new Promise(r => setTimeout(r, 400)),
+    ]);
     const root = document.getElementById('root');
     const rs = root ? getComputedStyle(root) : null;
     const varVal = rs ? rs.getPropertyValue('--codedrobe-image-hero').trim() : '';
