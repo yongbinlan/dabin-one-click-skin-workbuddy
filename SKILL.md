@@ -381,8 +381,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 已经发布到 GitHub，别人 `clone` 下来就能用：
 
 ```
-https://github.com/yongbinlan/dabin-one-click-skin-workbuddy
+https://github.com/yongbinlan/workbuddy-one-click-skin
 ```
+
+（原名 `dabin-one-click-skin-workbuddy` —— 2026-09-18 去掉里面冗余的个人花名，
+GitHub 会给旧路径做重定向，老链接不会烂。）
 
 仓库内容 = 本 skill 的 `SKILL.md` + `scripts/` + `template/` + `docs/`（展示图），
 外加 `LICENSE` / `NOTICE`。
