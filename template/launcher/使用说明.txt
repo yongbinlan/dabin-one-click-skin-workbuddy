@@ -251,7 +251,7 @@
   tools\build-wallpaper-picker.mjs
                               模板 → 纯 ASCII 的 .hta，含四道构建期校验
   tools\launcher.mjs          等 CDP → 注入主题 → 注入皮肤层 → 自检
-  tools\verify-launcher.mjs   回归自检（12 组 / 14 项断言，约 2 秒）
+  tools\verify-launcher.mjs   回归自检（12 项断言，约 2 秒）
   tools\diag-occluders.mjs    遮挡诊断：谁把壁纸挡住了
   tools\cdp-probe.mjs         只读诊断：CDP + 四层令牌实测值
   tools\shot.mjs              给当前界面截图（WorkBuddy 渲染层）

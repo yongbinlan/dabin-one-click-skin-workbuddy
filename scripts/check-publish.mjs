@@ -204,12 +204,22 @@ if (!USE_WORKTREE) {
       : ok(`自检 ${expected} 项，且都有 --only 守卫`);
   }
 
-  const md = tracked.filter((f) => f.endsWith(".md"));
+  const md = tracked.filter((f) => /\.(md|txt|mjs|js|json|css|ya?ml)$/i.test(f) && !isBinary(f));
   const nums = [];
   for (const rel of md) {
+    // 代码文件里跳过注释行：真实声明只会写在**字符串字面量**里
+    // （例如 init.mjs 那句 console.log("……（N 项自检）")）。
+    // 注释里出现的数字是**在描述这件事**，不是声明 ——
+    // 不加这条，这个检查器会把自己的解释性注释判成违规。
+    const isCode = /\.(mjs|js|json|css|ya?ml)$/i.test(rel);
     const lines = (readText(rel).text || "").split(/\r?\n/);
     lines.forEach((line, i) => {
-      for (const m of line.matchAll(/(\d+)\s*项自检|(\d+)\s*项全绿/g))
+      if (isCode && /^\s*(\/\/|\/\*|\*|#|<!--)/.test(line)) return;
+      // 措辞要枚举全 —— 这个检查器第一版只认「项自检」，于是漏掉了
+      // 安装说明文件里的「项断言」写法和 init.mjs 里的那句提示：
+      // 前者是措辞没覆盖，后者是**文件类型没覆盖**（原来只扫 *.md）。
+      // 教训：扫描类门禁的失效方式不是"判错"，而是"根本没扫到"。
+      for (const m of line.matchAll(/(\d+)\s*项(?:自检|全绿|断言)|覆盖\s*(\d+)\s*项/g))
         nums.push({ rel, line: i + 1, n: +(m[1] || m[2]) });
     });
   }

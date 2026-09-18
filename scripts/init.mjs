@@ -324,4 +324,4 @@ console.log();
 if (fs.existsSync(path.join(DEST, "README.md"))) {
   console.log("详细说明：README.md ｜ 简短版：launcher\\使用说明.txt");
 }
-console.log("排障：node \"" + path.join(DEST, "tools", "verify-launcher.mjs") + "\"   （14 项自检）");
+console.log("排障：node \"" + path.join(DEST, "tools", "verify-launcher.mjs") + "\"   （12 项自检）");
