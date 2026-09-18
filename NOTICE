@@ -1,0 +1,39 @@
+dabin-one-click-skin-workbuddy（WorkBuddy 一键换肤）
+Copyright 2026 蓝晟硕
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+--------------------------------------------------------------------------
+上游作品与出处
+--------------------------------------------------------------------------
+本工程在**运行期依赖** CodeDrobe CLI（@codedrobe/core），由使用者自行安装；
+本仓库不包含它的代码，因此不构成对其源代码的再分发。
+
+    https://github.com/CodeDrobe/core
+
+上游的署名声明（按其 NOTICE 原样保留）：
+
+    CodeDrobe Core
+    Copyright 2026 anhao and CodeDrobe contributors
+
+    This product is licensed under the Apache License, Version 2.0.
+
+    OpenAI, Codex, Tencent, and WorkBuddy are trademarks of their respective
+    owners. This project is independent and is not endorsed by or affiliated
+    with those companies.
+
+--------------------------------------------------------------------------
+本仓库自有部分
+--------------------------------------------------------------------------
+- scripts/init.mjs、template/（launcher、tools、themes）
+- template/themes/ 下的主题样式由本项目 heige-codex-skin-studio 生成，
+  设计令牌（--heige-*）与配色为本项目自有
+- 其中沿用了 CodeDrobe 主题系统的 CSS 变量与类名
+  （.cr-theme / --cr-* / --codedrobe-image-hero）以完成互操作；
+  对变量名与类名的引用不构成对 CodeDrobe 源代码的再分发
+
+--------------------------------------------------------------------------
+商标声明
+--------------------------------------------------------------------------
+OpenAI、Codex、Tencent、WorkBuddy 均为其各自所有者的商标。
+本项目为独立的第三方项目，与上述公司无隶属关系，亦未获其背书。

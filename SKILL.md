@@ -36,7 +36,7 @@ agent_created: true
 |---|---|---|
 | 系统 | **Windows** | 依赖 `.cmd` / `.vbs` / `.hta` / `.lnk`，不做跨平台 |
 | WorkBuddy | 已安装 | 桌面端（Electron）。装在非标准路径也支持，见 §6 |
-| Node.js | ≥ 18 | 工程里的脚本用 `node:` 前缀导入与 ESM |
+| Node.js | **≥ 22.4** | 工程里的脚本用 `node:` 前缀导入与 ESM |
 | CodeDrobe CLI | `@codedrobe/core` | 皮肤最终靠它注入。装在 `<用户目录>\.workbuddy\tools\codedrobe`，或用 `CODEDROBE_HOME` 指定 |
 
 装 CodeDrobe CLI：
@@ -376,6 +376,7 @@ https://github.com/yongbinlan/dabin-one-click-skin-workbuddy
 | `scripts/init.mjs` | 本 skill `scripts/` |
 | `template/**` | 本 skill `template/`（含 `template/docs/picker*.png`） |
 | `docs/skin-*.jpg` | 展示图（**必须先脱敏**） |
+| `LICENSE` `NOTICE` | 上游 Apache-2.0 全文 + 出处/商标声明（改动许可相关时应复核） |
 
 ### 两条发布期硬约束
 
@@ -394,4 +395,27 @@ https://github.com/yongbinlan/dabin-one-click-skin-workbuddy
 
 > 推之前做一次**字节级回环验证**：`git checkout-index` 到临时目录，
 > 与源文件逐个比 sha256，并确认 `.cmd` 仍是 GBK + 无 BOM + 零裸 LF。
-> 44/44 一致才算过 —— 光看 `git status` 干净说明不了字节没问题。
+> **当前是 46/46** 一致才算过 —— 光看 `git status` 干净说明不了字节没问题。
+
+---
+
+## 12. 许可与出处
+
+| 文件 | 内容 |
+|---|---|
+| `LICENSE` | Apache-2.0 全文（与上游逐字节相同，未改动模板原文） |
+| `NOTICE` | 上游署名（原样保留）+ 本工程 `Copyright 2026 蓝晟硕` + 商标声明 |
+
+**边界要分清**：CodeDrobe 是**运行期依赖**，不是被分发物 —— 本仓库不含它的源码，
+使用者自行 `npm install`。所以不构成对其源代码的再分发；保留 `NOTICE` 与出处声明
+是出于诚实与礼节，并顺带覆盖商标免责（仓库名里就带 WorkBuddy / 上游 NOTICE 提到
+OpenAI、Codex、Tencent）。
+
+`template\themes\` 下的样式由本项目的 `heige-codex-skin-studio` 生成
+（设计令牌 `--heige-*`），**不是**上游派生文件；只是沿用其变量名与类名
+（`.cr-theme` / `--cr-*` / `--codedrobe-image-hero`）以完成互操作。
+引用标识符不构成代码再分发。
+
+> **仍悬而未决**：`template\themes\night-street\assets\hero.webp` 无版权元数据，
+> 来源不可从文件本身证明。公开仓库要长期放着，得确认它是自有素材，
+> 或换成自造抽象图。

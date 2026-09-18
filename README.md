@@ -56,11 +56,14 @@ rem 3. 注入皮肤（WorkBuddy 需要在运行）
 | 项 | 要求 |
 |---|---|
 | 系统 | **Windows**（依赖 `.cmd` / `.vbs` / `.hta` / `.lnk`，不做跨平台） |
-| Node.js | ≥ 18 |
+| Node.js | **≥ 22.4** |
 | WorkBuddy | 已安装的桌面端 |
 | CodeDrobe CLI | `npm install --prefix "%USERPROFILE%\.workbuddy\tools\codedrobe" @codedrobe/core` |
 
 > 刻意**不用** `npm -g`：避免污染全局 prefix，也避免和别的工具抢版本。
+>
+> Node 版本不是随便定的：主题打包交给上游 `@codedrobe/core`，它声明 `engines.node >= 22.4`。
+> Node 18/20 能跑本工程的脚本（探测、展开、壁纸），但走到 `theme pack` 会失败。
 
 ---
 
@@ -234,7 +237,7 @@ node <工程>\tools\verify-launcher.mjs
 4. `node tools\launcher.mjs` —— 注入并**看图确认**（不要只看 JSON 的 `pass: true`）
 5. 视觉达标后递增 `theme.json` 的 `version`，重打包
 
-想从**参考图**做一套全新主题，走 [CodeDrobe Theme](https://github.com/codedrobe) 的
+想从**参考图**做一套全新主题，走 [CodeDrobe Theme](https://github.com/CodeDrobe/core) 的
 reference-image 流程。
 
 ---

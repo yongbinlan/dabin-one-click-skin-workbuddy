@@ -33,9 +33,12 @@ rem 3. 注入皮肤（WorkBuddy 需要在运行）
 | 项 | 要求 |
 |---|---|
 | 系统 | **Windows**（依赖 `.cmd` / `.vbs` / `.hta` / `.lnk`） |
-| Node.js | ≥ 18 |
+| Node.js | **≥ 22.4** |
 | WorkBuddy | 已安装的桌面端 |
 | CodeDrobe CLI | `npm install --prefix "%USERPROFILE%\.workbuddy\tools\codedrobe" @codedrobe/core` |
+
+> Node 版本不是随便定的：主题打包交给上游 `@codedrobe/core`，它声明
+> `engines.node >= 22.4`。Node 18/20 能跑本工程的脚本，但走到 `theme pack` 会失败。
 
 ---
 
