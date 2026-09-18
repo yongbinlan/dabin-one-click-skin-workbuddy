@@ -424,6 +424,17 @@ if (process.argv.includes("--selftest")) {
     UP_PLACES: "1",
     LAST_DIR_ROUNDTRIP: "1",
     LAST_DIR_GHOST: "1",
+    /* 起点记忆的另外三条。它们盯的不是"能不能记住"，而是"记的东西对不对" ——
+       LAST_DIR_ROUNDTRIP 原先拿 WIN.lib 做往返、还把"能记住壁纸库"写成必须通过，
+       等于用门禁保证了 bug 的存在：跳进壁纸库目录看到的图和壁纸库视图一模一样，
+       用户点完「选一张图…」只会觉得按钮坏了。现在四条各归各位。 */
+    LAST_DIR_SKIPS_LIB: "1",
+    LAST_DIR_CJK: "1",
+    LAST_DIR_SELFHEAL: "1",
+    /* 「选一张图…」点下去必须真的换视图。两条：浏览态点 → 回位置列表；
+       起点被写脏时点 → 也不能跳回壁纸库目录。 */
+    PICK_IN_BROWSE_TO_LIST: "1",
+    PICK_FROM_LIB_SKIPS_LIB: "1",
     /* 浏览一个目录时状态行必须给出三个出路：上一级 / 换个位置 / 返回壁纸库。
        自绘浏览器没有系统对话框那种侧边栏，"走到某一层出不去"是它最大的风险，
        所以把导航口的条数本身写成门禁。改导航时记得同步这个数。 */
@@ -453,8 +464,13 @@ if (process.argv.includes("--selftest")) {
   const nPlTh = Number(get("PLACES_DTHUMB"));
   if (!(nPlCard >= 1)) problems.push(`PLACES_CARDS=${get("PLACES_CARDS")}，位置列表一张卡片都没画出来（第一屏会是空的）`);
   if (nPlCard !== nPlTh) problems.push(`位置卡片 ${nPlCard} 张，但文件夹图形只有 ${nPlTh} 个 —— 有卡片没画出中间那块缩略图位`);
+  /* 点「选一张图…」之后那一屏的卡片数，必须与直接渲染位置列表时一致 ——
+     不一致说明按钮走的不是同一条渲染路径，用户会看到一屏对不上的东西。 */
+  const nPickCard = Number(get("PICK_CARDS_IN_LIST"));
+  if (!(nPickCard >= 1)) problems.push(`PICK_CARDS_IN_LIST=${get("PICK_CARDS_IN_LIST")}，点「选一张图…」之后一张卡片都没画出来`);
+  if (nPickCard !== nPlCard) problems.push(`点「选一张图…」后是 ${nPickCard} 张卡片，直接渲染位置列表是 ${nPlCard} 张 —— 两条路渲染结果不一致`);
 
   console.log("");
   if (problems.length) fail("自检未通过", problems);
-  console.log(`✅ 自检通过：${Object.keys(need).length} 项断言 + 9 项数值一致性校验`);
+  console.log(`✅ 自检通过：${Object.keys(need).length} 项断言 + 10 项数值一致性校验`);
 }

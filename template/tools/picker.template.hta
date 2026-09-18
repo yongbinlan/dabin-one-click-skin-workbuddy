@@ -713,12 +713,41 @@ function placesList() {
   return out;
 }
 
+/* 两条路径是不是同一个目录。大小写、结尾反斜杠都可能不一样：从别处复制来的
+   路径、dirUp() 拼出来的路径，写法都不统一，直接用 === 比会漏。 */
+function sameDir(a, b) {
+  if (!a || !b) return false;
+  var x = String(a).replace(/\\+$/, "").toLowerCase();
+  var y = String(b).replace(/\\+$/, "").toLowerCase();
+  return x === y;
+}
+
+/* last-dir 的读写必须用同一种字符集。
+   写端是 FSO 的 CreateTextFile(p, true, false)，按**系统 ANSI**（本机 GBK）落盘；
+   读端原来却用 readTextUtf8 —— 路径一旦含中文，读回来就是乱码，FolderExists
+   判否，起点记忆**静默失效**（不报错，用户只是发现"怎么每次都要从头翻"）。
+   纯西文路径下两种字符集恰好一致，所以这个坑一直没露头。
+   这里成对走 ANSI：writeTextAnsi 只是 writeAscii 的对称名字 —— 写端实现不动，
+   它还被 .bat 与自检日志复用，那些内容本来就是纯 ASCII。 */
+function writeTextAnsi(p, s) { writeAscii(p, s); }
+
+function readTextAnsi(p) {
+  try {
+    var t = fso().OpenTextFile(ntv(p), 1, false, 0);   /* 0 = TristateFalse = ANSI */
+    var s = t.ReadAll(); t.Close();
+    return String(s);
+  } catch (e) { return ""; }
+}
+
 /* 上次挑过图的目录。文件没了、目录被删了、内容坏了 —— 一律当没有，
-   退回位置列表。起点猜错只是多翻一层，不该变成一个错误提示。 */
+   退回位置列表。起点猜错只是多翻一层，不该变成一个错误提示。
+   壁纸库目录自己也不算"挑图的地方"（理由见 rememberDir），判到就返回 null ——
+   这样历史版本写脏的那个值会被自动甩掉，不用人工去清文件。 */
 function recallDir() {
   var p = "";
-  try { p = trim(readTextUtf8(WIN.lastDir)); } catch (e) { p = ""; }
+  try { p = trim(readTextAnsi(WIN.lastDir)); } catch (e) { p = ""; }
   if (!p) return null;
+  if (sameDir(p, WIN.lib)) return null;
   var ok = false;
   try { ok = fso().FolderExists(ntv(p)); } catch (e1) { ok = false; }
   return ok ? p : null;
@@ -726,6 +755,12 @@ function recallDir() {
 
 function rememberDir(p) {
   if (!p || p === PLACES) return;
+  /* 壁纸库目录不记。记了等于给自己挖坑：下次点「选一张图…」跳进去，
+     看到的图和壁纸库视图一模一样，用户只会得出"按钮坏了"的结论。
+     （2026-09-18 陛下实测报的"点击了没反应"就是这个：文件里存的正是
+       wallpapers 目录。写进去的是上一版自检 —— 它拿 WIN.lib 做往返测试
+       而且不还原，见下面自检段。） */
+  if (sameDir(p, WIN.lib)) return;
   var ok = false;
   try { ok = fso().FolderExists(ntv(p)); } catch (e) { ok = false; }
   if (!ok) return;
@@ -795,8 +830,14 @@ function goDir(p) {
  * 起点：上次挑过图的目录（挑图有强习惯性，八成还是那里）；
  * 没有记忆就去位置列表，从盘符 / 图片 / 桌面里挑一个。
  * 两条路都是缩略图网格，点进来就看得见图 —— 这是这一步的全部意义。
+ *
+ * 两种状态走两个分支，这一点是必须的：壁纸库视图点它是"开始挑"
+ * （直奔上次那个目录，省一趟翻）；已经在浏览态里再点它，**必须给出可见变化**。
+ * 不分支就会留一个死键 —— 上次挑图的目录正好是当前目录时，goDir(同一目录)
+ * 重绘出来的东西一模一样，看起来就是"点了没反应"。
  */
 function pickFolder() {
+  if (browseDir !== null) { goDir(PLACES); return; }
   var last = recallDir();
   goDir(last ? last : PLACES);
 }
@@ -1343,23 +1384,90 @@ function selfTest() {
     slog("UP_TO_DRIVE=" + (dirUp("C:\\Users") === null ? 1 : 0));
     slog("UP_AT_ROOT=" + (dirUp("C:\\") === null ? 1 : 0));
     slog("UP_PLACES=" + (dirUp(PLACES) === null ? 1 : 0));
-    /* 起点记忆：写进去读出来必须是同一条；指向不存在的目录时必须当没有
-       （否则一点「选一张图…」就跳进空目录，用户会以为图没了）。 */
-    var memOk = 0;
+    /* ---- 起点记忆（上次挑图的目录）----
+       这一段盯的不是"能不能记住"，而是"记的东西对不对"。四件事必须同时成立，
+       缺一条用户就会撞上"点了没反应"或者"每次都要从头翻"：
+         ① 真实目录往返要通；
+         ② **壁纸库目录不许被记住** —— 它的内容与壁纸库视图完全重合，跳进去
+            等于原地踏步（陛下 2026-09-18 报的"点击了没反应"就是这个）；
+         ③ 路径含中文时往返也要通 —— 写端是 ANSI、读端原来是 UTF-8，
+            字符集配错时中文路径静默失效；
+         ④ 文件里已经被写脏（旧版自检留下的）时，要自愈成"当作没有"。
+       另外：这整段**先备份、后还原**。自检不许改用户状态 ——
+       上一版恰恰漏了还原，于是每跑一次自检就往用户机器上留一个壁纸库路径，
+       而那条断言还把"能记住壁纸库"写成了必须通过：门禁把 bug 固化成了契约。 */
+    var saveLast = "";
+    try { saveLast = readTextAnsi(WIN.lastDir); } catch (es0) { saveLast = ""; }
+    var memOk = 0, skipLib = 0, cjkOk = 0, selfHeal = 0, ghost = null;
+    var pickToList = 0, pickCards = 0, pickSkipsLib = 0;
+    var cjkDir = WIN.root + "\\logs\\图片测试";
     try {
-      rememberDir(WIN.lib);
-      memOk = (recallDir() === WIN.lib) ? 1 : 0;
-    } catch (em) { memOk = 0; }
-    slog("LAST_DIR_ROUNDTRIP=" + memOk);
-    var ghost = null;
-    try {
+      try { rememberDir(WIN.root); } catch (e1) { }
+      memOk = sameDir(recallDir(), WIN.root) ? 1 : 0;
+
+      /* 壁纸库不许被记：先把文件填成一个"无效但内容确定"的值，
+         再调 rememberDir(WIN.lib) —— 文件必须**一个字节都没动**。
+         光看 recallDir() 返回 null 是不够的：那样连"根本没写"和"写了又被拒"
+         都分不清，而这两件事对应的 bug 完全不同。 */
+      var beforeLib = "";
+      try { writeTextAnsi(WIN.lastDir, "Z:\\no-such-dir-at-all"); beforeLib = readTextAnsi(WIN.lastDir); } catch (e2a) { }
+      try { rememberDir(WIN.lib); } catch (e2) { }
+      var afterLib = "";
+      try { afterLib = readTextAnsi(WIN.lastDir); } catch (e2b) { }
+      skipLib = (afterLib === beforeLib && !sameDir(afterLib, WIN.lib)) ? 1 : 0;
+
+      /* 中文路径往返。西文路径下 ANSI 与 UTF-8 恰好一致，测不出字符集配错；
+         必须用真中文目录名才盖得住。（临时建、测完删。） */
+      try {
+        if (!fso().FolderExists(ntv(cjkDir))) fso().CreateFolder(ntv(cjkDir));
+        rememberDir(cjkDir);
+        cjkOk = sameDir(recallDir(), cjkDir) ? 1 : 0;
+      } catch (e3) { cjkOk = 0; }
+      try { if (fso().FolderExists(ntv(cjkDir))) fso().DeleteFolder(ntv(cjkDir)); } catch (e4) { }
+
+      /* 历史脏值自愈：直接把壁纸库路径写进文件（模拟旧版自检留下的状态），
+         不手工清文件也必须当作"没有起点"。 */
+      try { writeTextAnsi(WIN.lastDir, WIN.lib); } catch (e5) { }
+      selfHeal = (recallDir() === null) ? 1 : 0;
+
       var saveTxt = "";
-      try { saveTxt = readTextUtf8(WIN.lastDir); } catch (eg1) { saveTxt = ""; }
-      writeAscii(WIN.lastDir, "Z:\\no-such-dir-at-all");
+      try { saveTxt = readTextAnsi(WIN.lastDir); } catch (eg1) { saveTxt = ""; }
+      writeTextAnsi(WIN.lastDir, "Z:\\no-such-dir-at-all");
       ghost = recallDir();
-      writeAscii(WIN.lastDir, saveTxt);
-    } catch (eg2) { ghost = "?err"; }
+      writeTextAnsi(WIN.lastDir, saveTxt);
+
+      /* ---- 「选一张图…」点下去必须真的有变化 ----
+         这是"点击了没反应"的正面断言。只验证函数不抛异常是不够的 ——
+         要验证点完以后**视图真的换了**：browseDir 变了，卡片也按新视图重画了。 */
+      /* 起点必须是**有效目录**，而且与当前浏览的目录不同 —— 否则这条断言
+         分不清"走了浏览态分支"和"走了起点记忆分支"：两条路都会落到 PLACES，
+         于是把浏览态分支整个删掉，它照样报 1（破坏测试 F 就是这么把它揪出来的：
+         改成 if(false) 之后构建竟然通过）。门禁的第二种假：不是没写，
+         是**在特定状态下无法区分被测分支**。 */
+      try { rememberDir(WIN.root); } catch (e7) { }
+      browseDir = WIN.root + "\\logs";
+      pickFolder();
+      pickToList = (browseDir === PLACES) ? 1 : 0;
+      var dvP = document.getElementsByTagName("div"), nCardP = 0;
+      for (var pz = 0; pz < dvP.length; pz++) {
+        if (String(dvP[pz].className || "").indexOf("card") === 0) nCardP++;
+      }
+      pickCards = nCardP;
+
+      browseDir = null;                                  /* 站回壁纸库视图 */
+      try { writeTextAnsi(WIN.lastDir, WIN.lib); } catch (e6) { }
+      pickFolder();                                      /* 起点被写脏时点它 */
+      pickSkipsLib = (browseDir === PLACES) ? 1 : 0;
+    } catch (em) { }
+    try { writeTextAnsi(WIN.lastDir, saveLast); } catch (e9) { }
+    slog("LAST_DIR_ROUNDTRIP=" + memOk);
+    slog("LAST_DIR_SKIPS_LIB=" + skipLib);
+    slog("LAST_DIR_CJK=" + cjkOk);
+    slog("LAST_DIR_SELFHEAL=" + selfHeal);
     slog("LAST_DIR_GHOST=" + (ghost === null ? 1 : 0));
+    slog("PICK_IN_BROWSE_TO_LIST=" + pickToList);
+    slog("PICK_CARDS_IN_LIST=" + pickCards);
+    slog("PICK_FROM_LIB_SKIPS_LIB=" + pickSkipsLib);
 
     // 浏览模式的渲染路径也要跑一遍。这段代码不点按钮就永远走不到，
     // 而它恰恰是本轮新功能的主体 —— 不覆盖等于没验证。
