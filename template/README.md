@@ -13,7 +13,7 @@
 rem 1. 展开工程（把 <skill目录> 换成实际路径）
 node <skill目录>\scripts\init.mjs --dest D:\my\workbuddy-skin
 
-rem 2. 自检，14 项全绿才算装好
+rem 2. 自检，12 项全绿才算装好
 node D:\my\workbuddy-skin\tools\verify-launcher.mjs
 
 rem 3. 注入皮肤（WorkBuddy 需要在运行）
@@ -287,7 +287,7 @@ node <skill目录>\scripts\init.mjs --dest <已有工程> --upgrade
 | 现象 | 怎么办 |
 |---|---|
 | 双击 `.cmd` 满屏「不是内部或外部命令」 | 编码或行尾不对 → 跑 `tools\_fix-cmd.ps1` |
-| 快捷方式点了没反应 | 跑自检第 1 项；重跑 `node tools\write-env.mjs` |
+| 快捷方式点了没反应 | 跑 `node tools\verify-launcher.mjs --only=1`；重跑 `node tools\write-env.mjs` |
 | 提示「主题包不存在」 | `build\` 下没有 `.codedrobe-theme` → 重跑 `init.mjs --upgrade` |
 | 皮肤注入了但界面没变 | `node tools\cdp-probe.mjs` 看 `targets` 数量（可能打到了另一个窗口） |
 | 换壁纸后看不见壁纸 | 档位调到「淡」，或跑 `node tools\diag-occluders.mjs` |
@@ -301,7 +301,7 @@ node <skill目录>\scripts\init.mjs --dest <已有工程> --upgrade
 node <工程>\tools\verify-launcher.mjs
 ```
 
-14 项自检，会直接告诉你哪一环坏了。
+12 项自检，会直接告诉你哪一环坏了。
 
 ---
 

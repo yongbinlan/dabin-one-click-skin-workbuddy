@@ -34,7 +34,7 @@
 rem 1. 展开工程（把 <仓库目录> 换成你 clone 下来的路径）
 node <仓库目录>\scripts\init.mjs --dest D:\my\workbuddy-skin
 
-rem 2. 自检，14 项全绿才算装好
+rem 2. 自检，12 项全绿才算装好
 node D:\my\workbuddy-skin\tools\verify-launcher.mjs
 
 rem 3. 注入皮肤（WorkBuddy 需要在运行）
@@ -211,7 +211,7 @@ node <仓库目录>\scripts\init.mjs --dest <已有工程> --upgrade
 | 现象 | 怎么办 |
 |---|---|
 | 双击 `.cmd` 满屏「不是内部或外部命令」 | 编码或行尾不对 → 跑 `tools\_fix-cmd.ps1` |
-| 快捷方式点了没反应 | 跑自检第 1 项；重跑 `node tools\write-env.mjs` |
+| 快捷方式点了没反应 | 跑 `node tools\verify-launcher.mjs --only=1`；重跑 `node tools\write-env.mjs` |
 | 提示「主题包不存在」 | `build\` 下没有 `.codedrobe-theme` → 重跑 `init.mjs --upgrade` |
 | 皮肤注入了但界面没变 | `node tools\cdp-probe.mjs` 看 `targets` 数量（可能打到了另一个窗口） |
 | 换壁纸后看不见壁纸 | 档位调到「淡」，或跑 `node tools\diag-occluders.mjs` |
@@ -225,7 +225,16 @@ node <仓库目录>\scripts\init.mjs --dest <已有工程> --upgrade
 node <工程>\tools\verify-launcher.mjs
 ```
 
-14 项自检，会直接告诉你哪一环坏了。
+12 项自检，会直接告诉你哪一环坏了。
+
+排障时不必全跑 —— 第 6/9/10/11 项会动真实环境（临时改主题包名、重建选择器、
+拉起界面、真跑一遍 `.cmd`）。哪一环坏了就单跑哪一项，快且副作用最小：
+
+```bat
+node <工程>\tools\verify-launcher.mjs --list              rem 看各项编号
+node <工程>\tools\verify-launcher.mjs --only=1,7          rem 只跑第 1、7 项
+node <工程>\tools\verify-launcher.mjs --only=1,2,3,5,7,8,12   rem 只做纯静态检查
+```
 
 ---
 

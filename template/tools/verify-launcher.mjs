@@ -2,8 +2,9 @@
 /**
  * verify-launcher.mjs — 启动器回归验证（改主题/改启动器/升级应用后跑这个）
  *
- * 覆盖 11 项，每项都是"做了/没做"的可核判定，不看主观感受：
- *   1) .vbs 纯 ASCII 且无 BOM      —— wscript 按 GBK 解析，非 ASCII 会炸成阻塞对话框
+ * 覆盖 12 项，每项都是"做了/没做"的可核判定，不看主观感受：
+ *   1) .vbs / .ps1 纯 ASCII 且无 BOM —— wscript 与 PowerShell 5.1 按系统
+ *                                      ANSI 码页解析无 BOM 的文件，非 ASCII 会炸
  *   2) launcher.mjs 语法            —— node --check
  *   3) 三处启动入口指向 wscript.exe —— 换入口类改动必须复核
  *   4) 端到端（wscript → vbs → node） —— 退出码 0 + 日志出现注入/自检证据
@@ -15,14 +16,22 @@
  *   9) 壁纸选择器产物                —— 重建后须无变化（治"改了模板忘重新生成"）
  *  10) 界面自检                     —— 真的把界面拉起来，验 DOM 画出来了、命令跑得通
  *  11) .cmd 可执行性                —— 真的把 cmd 拉起来跑一遍，验能跑通并正常退出
+ *  12) tools/*.ps1 语法            —— param 必须位于首条语句，否则整个脚本解析不了
  *
- * 用法：node tools/verify-launcher.mjs
+ * 项数会被 README / SKILL.md 引用（写成「N 项自检」）。改这一行或加减检查段时，
+ * 记得同步那些数字 —— 它们曾经写着 14，实际只有 12。
+ *
+ * 用法：node tools/verify-launcher.mjs             跑全部 12 项
+ *       node tools/verify-launcher.mjs --only=1,7  只跑第 1、7 项
+ *       node tools/verify-launcher.mjs --list      列出各项编号
  * 退出码：0 = 全通过，1 = 有失败项
  *
  * 注意第 6 项会临时把主题包改名几百毫秒再还原（try/finally 保证还原）。
  * 如不想承担这点风险，注释掉第 6 项即可。
  * 第 9 项会重建壁纸选择器产物，第 10 项会短暂拉起一次界面自检（不可见、自动收尸），
  * 第 11 项会真的跑一遍 launcher 下的 .cmd（用重定向输入喂一个回车）。
+ * 有副作用的就是 6/9/10/11 这四项 —— 只想做纯静态检查时用
+ * `--only=1,2,3,4,5,7,8,12`，不碰运行环境。
  */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -55,6 +64,39 @@ const logLines = () => (fs.existsSync(LOG) ? fs.readFileSync(LOG, "utf8").split(
 const ok = (m) => { console.log("✅ " + m); pass.push(m); };
 const no = (m) => { console.log("❌ " + m); fail.push(m); };
 
+// ---------- 只跑指定项：--only=1,7 ----------
+// 排障时不必把 12 项全跑一遍 —— 第 6/9/10/11 项会动真实环境（改主题包名、
+// 重建选择器、拉起界面、真跑 .cmd）。哪一环坏了就单跑哪一项，快且副作用最小。
+// 另：第 1 项这种纯文件检查在 CI / 无图形环境里也能单跑。
+const TOTAL = 12;
+const ONLY = (() => {
+  const a = process.argv.slice(2).find((x) => x.startsWith("--only="));
+  if (!a) return null;
+  const s = new Set(a.slice("--only=".length).split(",")
+    .map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n >= 1 && n <= TOTAL));
+  return s.size ? s : null;
+})();
+const want = (n) => !ONLY || ONLY.has(n);
+
+if (process.argv.includes("--list")) {
+  [
+    " 1  .vbs / .ps1 编码（纯 ASCII、BOM）",
+    " 2  launcher.mjs 语法",
+    " 3  三处启动入口是否指向 wscript.exe",
+    " 4  端到端（wscript → vbs → node）",
+    " 5  未双开",
+    " 6  主题缺失降级（会临时改名主题包）",
+    " 7  launcher/*.cmd 编码 + 行尾",
+    " 8  tools/*.mjs 语法",
+    " 9  壁纸选择器产物（会重建）",
+    "10  界面自检（会短暂拉起界面）",
+    "11  .cmd 可执行性（会真跑一遍）",
+    "12  tools/*.ps1 语法",
+  ].forEach((l) => console.log(l));
+  console.log("\n用法：node tools/verify-launcher.mjs [--only=1,7] [--list]");
+  process.exit(0);
+}
+
 function procCount() {
   const r = spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command",
     "(Get-Process -Name WorkBuddy -ErrorAction SilentlyContinue | Measure-Object).Count"],
@@ -63,24 +105,57 @@ function procCount() {
   return Number.isFinite(n) ? n : null;
 }
 
-// ---------- 1) vbs 编码 ----------
-{
-  const b = fs.readFileSync(VBS);
-  let nonAscii = 0;
-  for (const x of b) if (x > 127) nonAscii++;
-  const bom = b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf;
-  console.log(`1) vbs ${b.length}B ｜ 非 ASCII ${nonAscii} ｜ BOM ${bom ? "有" : "无"}`);
-  (nonAscii === 0 && !bom) ? ok("vbs 纯 ASCII 无 BOM") : no(`vbs 编码异常（非ASCII=${nonAscii}, BOM=${bom}）`);
+// ---------- 1) vbs / ps1 编码 ----------
+if (want(1)) {
+  /** 数非 ASCII 字节，并判断是否带 UTF-8 BOM。
+   *  注意：BOM 自身的三个字节 EF BB BF 都 > 127，必须先判出 BOM 再跳过它计数 ——
+   *  否则「纯 ASCII 却带 BOM」这种文件会被算成 nonAscii=3 且 bom=true，
+   *  两个分支都不命中，静默放过。（这个坑是门禁自己的测试抓出来的。） */
+  const probe = (p) => {
+    const b = fs.readFileSync(p);
+    const bom = b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf;
+    let nonAscii = 0;
+    for (let i = bom ? 3 : 0; i < b.length; i++) if (b[i] > 127) nonAscii++;
+    return { b, nonAscii, bom };
+  };
+
+  // --- 1a) .vbs：wscript 读无 BOM 的文件时按系统 ANSI 码页解析。
+  //     非 ASCII 会被解成乱码，严重时弹一个阻塞对话框把启动流程卡死。
+  //     所以 .vbs 必须「纯 ASCII 且无 BOM」，两条都是硬要求。
+  const v = probe(VBS);
+  console.log(`1) vbs ${v.b.length}B ｜ 非 ASCII ${v.nonAscii} ｜ BOM ${v.bom ? "有" : "无"}`);
+  (v.nonAscii === 0 && !v.bom)
+    ? ok("vbs 纯 ASCII 无 BOM")
+    : no(`vbs 编码异常（非ASCII=${v.nonAscii}, BOM=${v.bom}）→ wscript 会炸或弹阻塞对话框`);
+
+  // --- 1b/1c) tools/*.ps1：PowerShell 5.1 的判定规则是
+  //     「有 BOM → 按 UTF-8 读；无 BOM → 按系统 ANSI 码页读」。
+  //     于是只有一种组合会真出事：**含中文但没有 BOM** —— 文件是 UTF-8 字节，
+  //     却按 GBK 解，路径和提示全变乱码。反过来纯 ASCII 时两种读法结果相同。
+  //     这条门禁来自一次真实漏检：某个 .ps1 被工具重新编码、悄悄多了个 BOM，
+  //     而它自己的注释正写着「intentionally pure ASCII / BOM-less」——
+  //     旧版第 1 项只看 .vbs，第 12 项又把 BOM 剥掉再解析，谁都没发现。
+  const ps1 = fs.readdirSync(path.join(ROOT, "tools")).filter((f) => /\.ps1$/i.test(f));
+  const fatal = [], stray = [];
+  for (const f of ps1) {
+    const { nonAscii, bom } = probe(path.join(ROOT, "tools", f));
+    if (nonAscii > 0 && !bom) fatal.push(`${f}（非 ASCII ${nonAscii} 处，却没 BOM → 会被按 GBK 解成乱码）`);
+    else if (nonAscii === 0 && bom) stray.push(`${f}（纯 ASCII 却带 BOM，多余且与同批文件不一致）`);
+  }
+  console.log(`   tools/*.ps1 共 ${ps1.length} 个 ｜ 致命 ${fatal.length} ｜ 多余 BOM ${stray.length}`);
+  if (fatal.length) no(`.ps1 编码会出乱码：${fatal.join(" / ")}`);
+  else if (stray.length) no(`.ps1 带了不必要的 BOM：${stray.join(" / ")} → 去掉 BOM 即可`);
+  else ok(`${ps1.length} 个 ps1 编码正确（无需 BOM 的组合）`);
 }
 
 // ---------- 2) 语法 ----------
-{
+if (want(2)) {
   const r = spawnSync(NODE, ["--check", LAUNCHER], { encoding: "utf8", windowsHide: true });
   r.status === 0 ? ok("launcher.mjs 语法通过") : no("launcher.mjs 语法错误：" + (r.stderr || "").slice(0, 200));
 }
 
 // ---------- 3) 入口指向 ----------
-{
+if (want(3)) {
   const entries = [
     ["desktop", `${HOME}/Desktop/WorkBuddy.lnk`],
     ["startmenu", `${HOME}/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/WorkBuddy.lnk`],
@@ -98,9 +173,10 @@ function procCount() {
 }
 
 // ---------- 4) + 5) 端到端 & 未双开 ----------
-const before = procCount();
-const mark = logLines().length;
-{
+// before/mark 只在真要跑这两项时才取，避免 --only=1 这种单跑也去拉起 powershell
+const before = (want(4) || want(5)) ? procCount() : null;
+const mark = want(4) ? logLines().length : 0;
+if (want(4)) {
   const t0 = Date.now();
   const r = spawnSync("wscript.exe", ["//nologo", VBS], { encoding: "utf8", timeout: 220000, windowsHide: true });
   const ms = Date.now() - t0;
@@ -112,7 +188,7 @@ const mark = logLines().length;
     ? ok(`端到端通过（${ms}ms）`)
     : no(`端到端未达预期（退出码 ${r.status}）`);
 }
-{
+if (want(5)) {
   const after = procCount();
   if (before === null || after === null) no("进程数取不到，双开检测跳过（unsupported）");
   else if (after === before) ok(`未双开（进程数稳定 ${after}）`);
@@ -120,7 +196,7 @@ const mark = logLines().length;
 }
 
 // ---------- 6) 主题缺失降级 ----------
-{
+if (want(6)) {
   const bak = THEME + ".bak-verify";
   if (!fs.existsSync(THEME)) {
     no("主题包不存在，无法测降级（先跑 build-theme.mjs 并打包）");
@@ -142,7 +218,7 @@ const mark = logLines().length;
 }
 
 // ---------- 7) launcher/*.cmd 编码 + 行尾 ----------
-{
+if (want(7)) {
   const dir = path.join(ROOT, "launcher");
   const cmds = fs.readdirSync(dir).filter((f) => f.endsWith(".cmd"));
   const bad = [];
@@ -177,7 +253,7 @@ const mark = logLines().length;
 }
 
 // ---------- 8) tools/*.mjs 语法 ----------
-{
+if (want(8)) {
   const dir = path.join(ROOT, "tools");
   const files = fs.readdirSync(dir).filter((f) => f.endsWith(".mjs"));
   const bad = [];
@@ -190,7 +266,7 @@ const mark = logLines().length;
 }
 
 // ---------- 9) 壁纸选择器产物 ----------
-{
+if (want(9)) {
   const HTA = path.join(ROOT, "launcher", "壁纸选择器.hta");
   const GEN = path.join(ROOT, "tools", "build-wallpaper-picker.mjs");
   const beforeBuf = fs.existsSync(HTA) ? fs.readFileSync(HTA) : null;
@@ -219,7 +295,7 @@ const mark = logLines().length;
 }
 
 // ---------- 10) 界面自检 ----------
-{
+if (want(10)) {
   const GEN = path.join(ROOT, "tools", "build-wallpaper-picker.mjs");
   // --selftest 会把界面真的拉起来（自检模式会把自己缩到 1x1 并移出屏幕，看不见），
   // 校验 DOM 是否真的画出来、命令管道是否真能跑通，然后自己收尸。
@@ -236,7 +312,7 @@ const mark = logLines().length;
 }
 
 // ---------- 11) .cmd 能真跑通 ----------
-{
+if (want(11)) {
   // 编码对了不等于能跑。这里真的把 cmd 拉起来跑一遍：
   // 给一段「直接回车」的输入，让它走完整流程再退出。
   // 能抓住的东西：括号块里的 goto 之类的语法坑、node 路径写错、
@@ -284,7 +360,7 @@ const mark = logLines().length;
 }
 
 // ---------- 12) tools/*.ps1 语法 ----------
-{
+if (want(12)) {
   // 这条门禁来自一次真实翻车：把 $ErrorActionPreference = "Stop" 写在文件第一行、
   // param(...) 放在注释之后，整个脚本就再也解析不了。
   // PowerShell 要求 param 必须是**第一条语句** —— 上面多一行赋值，它就
@@ -342,6 +418,10 @@ const mark = logLines().length;
 }
 
 console.log("\n================ 结果 ================");
+if (ONLY) {
+  const ran = [...ONLY].sort((a, b) => a - b).join(", ");
+  console.log(`本次为部分运行（--only=${ran}），共 ${TOTAL} 项里的 ${ONLY.size} 项`);
+}
 console.log(`通过 ${pass.length} / 失败 ${fail.length}`);
 if (fail.length) { fail.forEach((f) => console.log("  ❌ " + f)); process.exit(1); }
-console.log("全部通过");
+console.log(ONLY ? "所选项目全部通过" : "全部通过");

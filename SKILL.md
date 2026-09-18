@@ -81,7 +81,7 @@ node <本skill目录>\scripts\init.mjs --dest D:\my\workbuddy-skin
 node <工程>\tools\verify-launcher.mjs
 ```
 
-**14 项自检**，全绿才算装好了。这一步别省 —— 它能在用户发现问题之前，
+**12 项自检**，全绿才算装好了。这一步别省 —— 它能在用户发现问题之前，
 把「产物过期」「编码不对」「脚本语法错」这些静默故障先揪出来。
 
 ---
@@ -217,9 +217,26 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 
 纯 ASCII 的 `.cmd` 两种编码都合法，判不出来也没必要判 —— 只判含非 ASCII 的文件。
 
-### 7.4 `.vbs` 与 `.ps1` 必须纯 ASCII
+### 7.4 `.vbs` / `.ps1` 的编码：BOM 与解析器的关系
 
-PowerShell 5.1 把**无 BOM** 的 `.ps1` 按 ANSI/GBK 解析，里面任何非 ASCII 字面量都会损坏路径。
+两个宿主对「BOM」的判定方向**相反**，别混着记：
+
+| 文件 | 宿主 | 无 BOM 时按什么读 | 后果 |
+|---|---|---|---|
+| `.vbs` | `wscript.exe` | 系统 ANSI 码页 | 含非 ASCII 就乱码，严重时弹**阻塞对话框**把启动流程卡死 |
+| `.ps1` | PowerShell 5.1 | 系统 ANSI 码页 | 同上 |
+| `.ps1` | PowerShell 5.1 | ——（有 BOM 时按 UTF-8） | 含中文反而**必须**带 BOM |
+
+所以 `.vbs` 硬要求「纯 ASCII 且无 BOM」；`.ps1` 真正会炸的只有一种组合：
+**含非 ASCII 却没有 BOM**（UTF-8 字节被当 GBK 解）。纯 ASCII 时两种读法结果相同。
+
+> **但纯 ASCII 却带 BOM 也要拦。** 这本身无害，却是个可靠的**症状**：
+> 说明文件被某个工具重新编码过，而每次重新编码都可能顺手把内容也改掉。
+> 实测抓到过一次 —— `_make-shortcuts.ps1` 被加了 BOM，而它的注释正写着
+> 「intentionally pure ASCII / BOM-less」，自相矛盾却没人发现，因为当时
+> 第 1 项只查 `.vbs`、第 12 项又把 BOM 剥掉再解析。
+> → 现已纳入自检第 1 项常设门禁（同时覆盖 `.vbs` 与 `tools/*.ps1`，
+>   并区分「致命」与「多余 BOM」两档，别把无害的和会炸的报成一样）。
 
 ### 7.5 `.ps1` 的 `param()` 必须是**文件第一条语句**
 
@@ -286,7 +303,7 @@ PowerShell 5.1 把**无 BOM** 的 `.ps1` 按 ANSI/GBK 解析，里面任何非 A
 | 现象 | 原因 | 怎么办 |
 |---|---|---|
 | 双击 `.cmd` 满屏「不是内部或外部命令」 | 编码或行尾不对（§7.3） | 工程里有修复脚本，跑一次即可 |
-| 快捷方式点了没反应 | `.vbs` 编码坏了，或 `env.cmd` 没生成 | 跑自检第 1 项；重跑 `tools\write-env.mjs` |
+| 快捷方式点了没反应 | `.vbs` 编码坏了，或 `env.cmd` 没生成 | 跑 `--only=1`；重跑 `tools\write-env.mjs` |
 | 建/改快捷方式报 `InvalidLeftHandSide` | `.ps1` 的 `param()` 不在第一条语句（§7.5） | 跑自检第 12 项定位 |
 | 提示「主题包不存在」 | `build\` 下没有 `.codedrobe-theme` | 重跑 `init.mjs --upgrade`，或手工 `theme pack` |
 | 皮肤注入了但界面没变 | WorkBuddy 有多窗口/多进程，注入打到了另一个 | 跑 `tools\cdp-probe.mjs` 看 `targets` 数量 |
@@ -295,7 +312,9 @@ PowerShell 5.1 把**无 BOM** 的 `.ps1` 按 ANSI/GBK 解析，里面任何非 A
 | 壁纸选择器打开是空的 | 壁纸库还没图 | 用 `换壁纸.cmd` 拖一张图进去，或重跑 `init.mjs` |
 | 找不到 WorkBuddy 主程序 | 装在非标准路径（§6） | `init.mjs --app "C:\...\WorkBuddy.exe"` |
 
-**通用第一步**：`node <工程>\tools\verify-launcher.mjs`（14 项自检，会直接告诉你哪一环坏了）。
+**通用第一步**：`node <工程>\tools\verify-launcher.mjs`（12 项自检，会直接告诉你哪一环坏了）。
+排障时用 `--only=1,7` 只跑指定项、`--list` 看编号 —— 第 6/9/10/11 项会动真实环境
+（临时改主题包名、重建选择器、拉起界面、真跑一遍 `.cmd`），能避开就避开。
 
 ---
 
@@ -365,20 +384,56 @@ PowerShell 5.1 把**无 BOM** 的 `.ps1` 按 ANSI/GBK 解析，里面任何非 A
 https://github.com/yongbinlan/dabin-one-click-skin-workbuddy
 ```
 
-仓库内容 = 本 skill 的 `SKILL.md` + `scripts/` + `template/` + `docs/`（展示图）。
-本地工作副本在 `E:\WorkBuddy\dabin-one-click-skin-workbuddy`（git 已连远端）。
+仓库内容 = 本 skill 的 `SKILL.md` + `scripts/` + `template/` + `docs/`（展示图），
+外加 `LICENSE` / `NOTICE`。
+本地留一份 git 工作副本（**别把工作副本的绝对路径写进任何提交内容里** ——
+这是公开仓库，本机目录结构属于私有信息，写进去读者也无用）。
 
-改完本 skill 之后要重新发布，把这几项同步过去再推：
+### 11.1 发布流程：一条命令，别再手工 copy
 
-| 仓库路径 | 来自 |
-|---|---|
-| `SKILL.md` | 本 skill 根目录 |
-| `scripts/init.mjs` | 本 skill `scripts/` |
-| `template/**` | 本 skill `template/`（含 `template/docs/picker*.png`） |
-| `docs/skin-*.jpg` | 展示图（**必须先脱敏**） |
-| `LICENSE` `NOTICE` | 上游 Apache-2.0 全文 + 出处/商标声明（改动许可相关时应复核） |
+skill 与仓库是**两份物理副本**。手工同步的问题不是麻烦，是**漏了不会有任何反馈** ——
+实测漏过一次：仓库推完才发现 `SKILL.md` 少一节，只好再补一个提交。
 
-### 两条发布期硬约束
+```bat
+rem 发布：skill → 仓库，写完自动跑发布前自检
+node <本skill>\scripts\sync-to-repo.mjs --repo=<仓库路径>
+
+rem 只看差异，不动文件
+node <本skill>\scripts\sync-to-repo.mjs --repo=<仓库路径> --check
+
+rem 回灌：仓库 → skill（改动是在仓库侧做的时先用它）
+node <本skill>\scripts\sync-to-repo.mjs --repo=<仓库路径> --pull
+```
+
+**方向必须显式指定**，因为两边都是真副本，脚本猜不出谁新谁旧。
+实测踩过一次：在仓库侧改完 `SKILL.md` 直接跑默认方向，
+结果被 skill 侧的旧版覆盖，白改。
+
+同步清单写在脚本的 `MAP` 里（`SKILL.md` / `scripts/*.mjs` / `template/**`），
+**不靠文档里的对照表** —— 表也是要靠人记的，代码不是。
+不同步的是仓库独有的门面文件：`README.md`、`LICENSE`、`NOTICE`、
+`docs/`（展示图必须脱敏）、`.gitattributes`、`.gitignore`。
+
+### 11.2 发布前自检：`scripts/check-publish.mjs`
+
+```bat
+node <仓库>\scripts\check-publish.mjs              rem 查 HEAD 里已提交的字节
+node <仓库>\scripts\check-publish.mjs --worktree   rem 查工作区（提交前用这个）
+```
+
+它检查的是**要发布出去的那份字节**，所以用法是「先 commit，再跑，绿了才 push」。
+
+8 项：字节回环（HEAD 存的字节 == 磁盘字节，治 `.gitattributes` 失效）、
+`.cmd` / `.vbs` / `.ps1` 编码与行尾、私有路径与凭据、**文档数字与代码事实是否一致**、
+`--only` 守卫完整性、`template/` 文件数、展示图存在性、根目录必备文件。
+
+> **为什么要有「文档数字」这一项**：文档里写着的数字（N 项自检、N 个文件）
+> 会随代码漂移，而没有任何东西会因此报错 —— 页面渲染完全正常。
+> 实测漂过一次：文档写 14 项、代码实际 12 项，漂了很久没人发现。
+> 补齐后拿这个脚本对准当时的 HEAD 复跑，它独立复现了**全部四处人工才找出的缺陷**
+> （BOM、私有路径、缺守卫、6 处数字不符）—— 这就是它存在的意义。
+
+### 11.3 两条发布期硬约束
 
 **① 展示图必须脱敏 —— 仓库是 PUBLIC。**
 
@@ -390,12 +445,13 @@ https://github.com/yongbinlan/dabin-one-click-skin-workbuddy
 
 这个仓库里编码与行尾是**产物正确性**的一部分：
 `.cmd` 必须 GBK 无 BOM + CRLF，写成裸 LF 会双击报一串「不是内部或外部命令」；
-`.ps1` / `.vbs` 必须纯 ASCII。所以关掉 git 的一切行尾转换，让文件按字节进出 ——
+`.vbs` 必须纯 ASCII，`.ps1` 见 §7.4（危险组合是「含非 ASCII 却没 BOM」）。
+所以关掉 git 的一切行尾转换，让文件按字节进出 ——
 否则在 `autocrlf=true` 的机器上 clone，CRLF 会被换成 LF，`.cmd` 当场失效。
 
-> 推之前做一次**字节级回环验证**：`git checkout-index` 到临时目录，
-> 与源文件逐个比 sha256，并确认 `.cmd` 仍是 GBK + 无 BOM + 零裸 LF。
-> **当前是 46/46** 一致才算过 —— 光看 `git status` 干净说明不了字节没问题。
+> 这件事**已由 `check-publish.mjs` 第 1 项常设门禁覆盖**，
+> 不必再手工 `git checkout-index` 比 sha256 —— 光看 `git status` 干净说明不了字节没问题，
+> 但现在有脚本会替你看。
 
 ---
 

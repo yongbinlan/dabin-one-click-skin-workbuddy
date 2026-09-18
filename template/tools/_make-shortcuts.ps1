@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$Exe  = "",
   [string]$Name = "WorkBuddy (skinned)"
 )
