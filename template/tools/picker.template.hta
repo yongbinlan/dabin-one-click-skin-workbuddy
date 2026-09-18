@@ -213,7 +213,12 @@ var WIN = {
   flag:    ROOT + "\\logs\\picker-selftest.flag",
   /* 上次挑图的目录。挑图这事有强习惯性 —— 图基本都在同一个目录里，
      每次都从"这台电脑"翻下去，等于把同一个动作重复做。 */
-  lastDir: ROOT + "\\logs\\picker-last-dir.txt"
+  lastDir: ROOT + "\\logs\\picker-last-dir.txt",
+  /* 原生选图这条路的三件东西：一份临时 .ps1、一个"结果投递箱"、一个启动 .bat。
+     用文件传值而不是标准输出 —— 和 runCmd 那条通道同构，少一套机制要维护。 */
+  natPs1:  ROOT + "\\logs\\picker-native.ps1",
+  natOut:  ROOT + "\\logs\\picker-native.txt",
+  natBat:  ROOT + "\\logs\\picker-native.bat"
 };
 if (!WIN.node) WIN.node = "node";   // 读不到 env.cmd 就退回 PATH 里的 node
 
@@ -231,9 +236,9 @@ var T = {
   missingNote: "（记录的图片文件已不存在，界面会回落到主题自带壁纸）",
   disabledNote: "（皮肤层已关闭）",
   empty1: "壁纸库是空的。",
-  empty2: "点下面的「选一张图…」直接挑一张换上，或把图片直接拖进本窗口。",
+  empty2: "点下面的「用资源管理器选…」直接挑一张换上，或把图片直接拖进本窗口。",
   openLib: "打开壁纸库",
-  openLibTip: "在资源管理器里打开壁纸库目录（只是打开文件夹，不会自动换壁纸）。要加图请用「选一张图…」，或把图片直接拖进本窗口。",
+  openLibTip: "在资源管理器里打开壁纸库目录（只是打开文件夹，不会自动换壁纸）。要加图请点「用资源管理器选…」，或把图片直接拖进本窗口。",
   refresh: "刷新",
   closeWin: "关闭",
   switching: "正在切换，请稍候…",
@@ -258,18 +263,28 @@ var T = {
   // 某一张」。代码一直是「点哪张才收哪张」，可入口的名字在说另一件事 ——
   // 靠状态栏反复解释没用，那句话已经写在那儿很久了。
   // 名字改对 + 能直接点中一张图，这个疑虑才算真正消掉。
-  pickFolder: "选一张图…",
-  pickFolderTitle: "选一张图片直接换上；也可以选一个文件夹，进去慢慢挑",
+  /* 本轮**删掉两个键**，不是改文案：
+     · 「pickFolder」（原来显示成"选一张图…"）—— 入口换成原生对话框了，名字得跟着换。
+       它还有个额外麻烦：和函数 「pickFolder()」 同名，留着迟早有人改错那一个。
+     · 「pickFolderTitle」 —— 引用数 0，从来没接到任何控件上，是死文案。
+     删键必须**同时改掉引用**：漏一处就是运行时的 undefined，
+     按钮/状态行渲染成空白，而构建、语法、关键内容三道全绿，谁都看不出来。
+     主按钮那处已同步改成 T.nativeBtn，构建期另有两条门禁盯着（3c-2c / 3c-2d）。 */
   pickCanceled: "没有选择，未做任何改动。",
   pickFail: "没能读到所选路径，请在资源管理器里打开它再试。",
   pickNotImage: "选中的不是图片文件。支持 jpg / jpeg / png / webp / gif / bmp / avif。",
 
-  /* ---- 「选一张图…」的真身：界面自带的图片浏览器 ----
-     为什么不再用系统对话框：Windows 自带的选文件夹框（SHBrowseForFolder）
-     是 XP 时代的控件，**物理上**没有缩略图。用户看得见文件名，看不见图，
-     而挑壁纸恰恰是"看图"的活。本界面早就有一模一样的缩略图网格，
-     那就直接用，不再把用户丢进一个看不见图的框里。
-     系统对话框没有删掉，退到一个备用入口（见 T.dialogBtn）。 */
+  /* ---- 「选一张图…」的两条路 ----
+     主入口 = 资源管理器自己的文件对话框（见 pickByNative）；
+     兜底   = 界面自带的图片浏览器（见 pickFolder）。
+
+     「系统对话框」这个说法以前是个坑。那时候用的 Shell.Application.BrowseForFolder
+     背后是 XP 时代的 SHBrowseForFolder —— **物理上**没有缩略图，用户看得见文件名、
+     看不见图，而挑壁纸恰恰是"看图"的活。但问题出在**用的是哪一个对话框**，
+     不是"系统自带"这四个字：Vista+ 的通用对话框（IFileOpenDialog）有缩略图、
+     有左侧导航、有搜索，就是资源管理器那一套。所以本轮把主入口换成它，
+     并把老的 SHBrowseForFolder 入口**整个删掉** —— 留着两个"系统对话框"，
+     用户只会点到错的那个。 */
   placesTitle: "选个位置开始翻",
   placesNote: "点一个位置进去。翻到哪一层，那层的文件夹和图片都会列出来；点图片才会换上。",
   dirsLabel: "文件夹",
@@ -289,8 +304,17 @@ var T = {
   driveNetwork: "网络位置",
   driveCd: "光驱",
   driveOther: "磁盘",
-  dialogBtn: "用系统对话框选…",
-  dialogFail: "系统对话框没打开（已记进日志）。上面这套浏览一样能挑图，不用管它。",
+  nativeBtn: "用资源管理器选…",
+  /* 主按钮的悬停说明。按钮本身要短（它和「在界面里翻…」并排），
+     所以"打开哪个框、挑几张、选完怎样"这三件细节放这里说。
+     入口的名字与它实际打开的框必须一致 —— 这是前两轮反复踩的坑：
+     叫「浏览文件夹…」时用户以为要交出一个文件夹，
+     叫「选一张图…」时又看不出图是从哪来的。 */
+  nativeTitle: "打开资源管理器的选图框（有缩略图 / 能搜索 / 能跳到最近位置），挑一张直接换上。",
+  inUiBtn: "在界面里翻…",
+  nativeWait: "已经打开「资源管理器」的选图框 —— 挑一张，选完自动换上。（关掉那个框就是放弃）",
+  nativeFail: "这台机器上打不开资源管理器选图框（脚本可能被安全策略拦住）。已改用界面自带的图片浏览器 —— 照样挑得到图。",
+  nativeTimeout: "等太久了，先当放弃。已切到界面自带的图片浏览器。",
   browsing: "正在浏览：",
   browseReady: "已列出下面这些图 —— 它们只是预览，一张都还没进壁纸库。点哪张，才收哪张。",
   /* 「这里只是预览」必须写在最显眼的地方。用户选了文件夹之后，
@@ -822,10 +846,10 @@ function goDir(p) {
 }
 
 /*
- * 「选一张图…」的入口。
+ * 「选一张图…」的**兜底**入口：界面自带的图片浏览器。
  *
- * 它现在**不弹系统对话框**，而是把界面切进自己的图片浏览器 —— 因为系统
- * 那个框给不了缩略图。详见 T 文案表里 placesTitle 上面那段说明。
+ * 主入口现在是原生对话框（见 pickByNative）。这一条是兜底：原生那条路可能被
+ * 安全策略拦住、也可能组件缺失 —— 那时用户仍然得选得成图，不能只剩一句报错。
  *
  * 起点：上次挑过图的目录（挑图有强习惯性，八成还是那里）；
  * 没有记忆就去位置列表，从盘符 / 图片 / 桌面里挑一个。
@@ -843,41 +867,184 @@ function pickFolder() {
 }
 
 /*
- * 备用入口：Windows 自带的选文件夹对话框。
+ * ================= 原生选图：调 Windows 自己的文件对话框 =================
  *
- * 为什么还留着它：网络位置、最近访问、库这几类地方，自绘浏览器翻起来确实
- * 不如系统对话框顺手。留一条备选，而不是把能力直接删掉。
+ * 为什么走 PowerShell：
+ *   HTA 里只剩老 ActiveX。Shell.Application.BrowseForFolder 背后是 XP 时代的
+ *   SHBrowseForFolder —— 只列文件名、不画缩略图。而"资源管理器那一套"
+ *   （Vista+ 的 IFileOpenDialog：缩略图 / 左侧导航 / 搜索 / 最近位置）在 HTA 里
+ *   没有直达通道，PowerShell 有：WinForms 的 OpenFileDialog 在
+ *   AutoUpgradeEnabled=true 时**内部就是 IFileOpenDialog** —— 同源、同外观。
  *
- * 为什么两段 try 分开写：上一位用户点它报了「打不开选择框」，而那句话背后
- * 可能是"组件被策略拦了"或"调用没被接受"两种完全不同的故障。老写法把它们
- * 包在一起，日志里只剩一个结果，查不下去。现在分别记错误码和描述。
+ * 为什么生成的 .ps1 里一个中文字都不许有：
+ *   .ps1 由 HTA 按 ANSI 落盘。中文一进去就是 GBK 字节，PowerShell 按什么编码
+ *   读回又取决于有没有 BOM —— 这是"有时对、有时错"的坑，换台机器就可能翻车。
+ *   base64 是纯 ASCII，任何编码下都一样，坑从根上关掉。
+ *   （实测踩过：按 ascii 写含中文的 .ps1，中文被截成垃圾字节，解析器报
+ *     「字符串缺少终止符」，而报错行指向**下一行的注释** —— 极难看出来。）
+ *
+ * 为什么用文件传值、而且异步：
+ *   文件传值是和 runCmd 那条通道同构，少一套机制要维护。
+ *   异步是因为对话框可能开很久 —— 同步等会把 HTA 主窗口冻住几分钟，
+ *   Windows 会给它盖一个"未响应"，用户可能直接强杀。
  */
-function pickByDialog() {
-  var sh = null;
-  try { sh = new ActiveXObject("Shell.Application"); }
-  catch (e0) {
-    slog("PICK_DIALOG_CREATE_FAIL " + errText(e0));
-    setStatus(T.dialogFail, false);
-    return;
-  }
-  var fd = null;
-  try { fd = sh.BrowseForFolder(0, T.pickFolderTitle, 0x4000, 0); }
-  catch (e1) {
-    slog("PICK_DIALOG_CALL_FAIL " + errText(e1));
-    setStatus(T.dialogFail, false);
-    return;
-  }
-  /* 返回 null = 用户点了取消，这不是错误 */
-  if (!fd) { setStatus(T.pickCanceled); return; }
-  var p = null;
-  try { p = String(fd.Self.Path); } catch (e2) { p = null; }
-  if (!p) { setStatus(T.pickFail, false); return; }
+var NATIVE_B64 = {
+  title:  "6YCJ5LiA5byg5Zu+",        /* 选一张图 */
+  filter: "5Zu+54mH5paH5Lu2",        /* 图片文件 */
+  all:    "5omA5pyJ5paH5Lu2"         /* 所有文件 */
+};
+var NATIVE_EXT = "*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.avif";
+var nativeBusy = false;               /* 一次只准开一个框，别叠 */
+var nativeTries = 0;
+var psPathCache = "";
 
-  var kind = pickedKind(p);
-  if (kind === "file") { addAndUse(p, parentDir(p)); return; }
+function sysRoot() {
+  var r = "";
+  try { r = String(shl().ExpandEnvironmentStrings("%SystemRoot%")); } catch (e) { r = ""; }
+  if (!r || r.indexOf("%") >= 0) r = "C:\\Windows";
+  return r;
+}
+
+/* 优先用系统目录下的绝对路径；找不到才退回 PATH 里的 powershell.exe ——
+   免得装在非标准位置的机器上直接被判死。 */
+function psExe() {
+  if (psPathCache) return psPathCache;
+  var base = sysRoot();
+  var cand = [
+    base + "\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    base + "\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe"
+  ];
+  for (var i = 0; i < cand.length; i++) {
+    try { if (fso().FileExists(ntv(cand[i]))) { psPathCache = cand[i]; return psPathCache; } } catch (e) { }
+  }
+  psPathCache = "powershell.exe";
+  return psPathCache;
+}
+
+function nativePs1Text() {
+  return [
+    "# generated by the wallpaper picker: pick one image, write it to $args[0]",
+    "# ASCII only by design - Chinese labels come from base64 (see NATIVE_B64 in the HTA).",
+    "$ErrorActionPreference = 'Stop'",
+    "$outFile  = $args[0]",
+    "$startDir = $args[1]",
+    "# probe mode: exercise the whole pipe (launch -> args -> file handoff) without",
+    "# showing any dialog. The HTA self-test runs exactly this once per build.",
+    "if ($args[2] -eq 'probe') {",
+    "  Set-Content -LiteralPath $outFile -Value ('#PROBE# args=' + $args.Count + ' start=' + (Test-Path -LiteralPath $startDir)) -Encoding Ascii",
+    "  exit 0",
+    "}",
+    "function Dec([string]$b) { return [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b)) }",
+    "$title = Dec '" + NATIVE_B64.title + "'",
+    "$fname = Dec '" + NATIVE_B64.filter + "'",
+    "$fnull = Dec '" + NATIVE_B64.all + "'",
+    "try {",
+    "  Add-Type -AssemblyName System.Windows.Forms",
+    "  $dlg = New-Object System.Windows.Forms.OpenFileDialog",
+    "  $dlg.Title = $title",
+    "  $dlg.Filter = ($fname + '|" + NATIVE_EXT + "|' + $fnull + '|*.*')",
+    "  $dlg.Multiselect = $false",
+    "  $dlg.CheckFileExists = $true",
+    "  $dlg.RestoreDirectory = $true",
+    "  # this single switch decides whether it is the Vista+ common dialog",
+    "  # (thumbnails, nav pane, search). false = the old file-name-only box.",
+    "  $dlg.AutoUpgradeEnabled = $true",
+    "  if ($startDir -and (Test-Path -LiteralPath $startDir)) { $dlg.InitialDirectory = $startDir }",
+    "  # a 1x1 topmost owner form: with no owner the modal box can open behind",
+    "  # the HTA window, and the user reads that as 'nothing happened'.",
+    "  $owner = New-Object System.Windows.Forms.Form",
+    "  $owner.FormBorderStyle = 'None'",
+    "  $owner.ShowInTaskbar = $false",
+    "  $owner.StartPosition = 'CenterScreen'",
+    "  $owner.Size = New-Object System.Drawing.Size(1, 1)",
+    "  $owner.TopMost = $true",
+    "  $owner.Show()",
+    "  $r = $dlg.ShowDialog($owner)",
+    "  $owner.Close()",
+    "  $owner.Dispose()",
+    "  if ($r -eq [System.Windows.Forms.DialogResult]::OK -and $dlg.FileName) {",
+    "    Set-Content -LiteralPath $outFile -Value $dlg.FileName -Encoding UTF8",
+    "  } else {",
+    "    Set-Content -LiteralPath $outFile -Value '#CANCEL#' -Encoding Ascii",
+    "  }",
+    "} catch {",
+    "  Set-Content -LiteralPath $outFile -Value ('#ERROR# ' + $_.Exception.Message) -Encoding Ascii",
+    "}"
+  ].join("\r\n");
+}
+
+/* 启动用的 .bat。为什么还落一个 .bat 而不是直接 Run powershell：
+   和 runCmd 同一个理由 —— cmd 的引号剥离规则太反直觉，路径一带空格就静默拼错。
+   写进 .bat 让 cmd 自己解析，绕开这层拼接。 */
+function nativeBatText() {
+  var startDir = recallDir();
+  var line = '"' + psExe() + '"' +
+    " -NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden" +
+    ' -File "' + ntv(WIN.natPs1) + '"' +
+    ' "' + ntv(WIN.natOut) + '"';
+  if (startDir) line += ' "' + ntv(startDir) + '"';
+  return "@echo off\r\n" + line + "\r\n";
+}
+
+/* 只给自检用：跑一次 probe 模式，验证"启动 → 传参 → 结果文件 → 读回"这条管道。
+   为什么值得单独一条：路径里有空格、有中文、少一个引号、参数数不对 ——
+   这些错全都不会报错，只会**得不到结果**，而界面上表现为"点了没反应"。
+   ShowDialog 那一下没法自动测（要弹窗），但管道可以。 */
+function nativeProbeCmd() {
+  return '"' + psExe() + '" -NoProfile -STA -ExecutionPolicy Bypass' +
+    ' -File "' + ntv(WIN.natPs1) + '"' +
+    ' "' + ntv(WIN.natOut) + '"' +
+    ' "' + ntv(WIN.root) + '" probe';
+}
+
+function pickByNative() {
+  if (nativeBusy) return;
+  var txt = "";
+  try { txt = nativePs1Text(); } catch (e0) { txt = ""; }
+  if (!txt) { nativeFallback(T.nativeFail); return; }
+  try { writeAscii(WIN.natPs1, txt); } catch (e1) { nativeFallback(T.nativeFail); return; }
+  try { writeAscii(WIN.natBat, nativeBatText()); } catch (e2) { nativeFallback(T.nativeFail); return; }
+  delIf(WIN.natOut);
+  /* Run 的第三个参数给 false = 不等它跑完。等它就得同步阻塞几分钟（见上面那段）。 */
+  try { shl().Run("cmd.exe /c \"" + ntv(WIN.natBat) + "\"", 0, false); }
+  catch (e3) { nativeFallback(T.nativeFail); return; }
+  nativeBusy = true;
+  nativeTries = 0;
+  setStatus(T.nativeWait);
+  window.setTimeout(nativeTick, 400);
+}
+
+/* 轮询"结果投递箱"。文件还没出现 = 人还在挑；出现了 = 有结论了。 */
+function nativeTick() {
+  nativeTries++;
+  var raw = "";
+  try { if (fso().FileExists(ntv(WIN.natOut))) raw = readTextUtf8(WIN.natOut); } catch (e) { raw = ""; }
+  /* PS 的 Set-Content -Encoding UTF8 会带 BOM，先剥掉再比。
+     内容为空的瞬间也要当"还没好" —— Set-Content 是先建后写，中间有一瞬是空文件。 */
+  var v = trim(String(raw).replace(/^\uFEFF/, ""));
+  if (!v) {
+    if (nativeTries > 1200) { nativeBusy = false; nativeFallback(T.nativeTimeout); return; }  /* 500ms × 1200 = 10 分钟 */
+    window.setTimeout(nativeTick, 500);
+    return;
+  }
+  nativeBusy = false;
+  if (v.indexOf("#CANCEL#") === 0) { setStatus(T.pickCanceled); return; }
+  if (v.indexOf("#ERROR#") === 0) {
+    slog("NATIVE_DIALOG_FAIL " + v);
+    nativeFallback(T.nativeFail);
+    return;
+  }
+  var kind = pickedKind(v);
+  if (kind === "file") { addAndUse(v, parentDir(v)); return; }
   if (kind === "bad") { setStatus(T.pickNotImage, false); return; }
-  if (kind === "dir") { goDir(p); return; }
   setStatus(T.pickFail, false);
+}
+
+/* 原生这条路不通时的出路。**必须立刻有出路** —— 这正是兜底浏览器存在的全部理由：
+   不是"更好看"，而是"原生不可用时，用户仍然选得成图"。 */
+function nativeFallback(msg) {
+  try { pickFolder(); } catch (e) { }
+  setStatus(msg, false);
 }
 
 function backToLib() { browseDir = null; render(); }
@@ -1065,9 +1232,9 @@ function render() {
     /* 位置列表：这一屏本身就是"从这里开始"，没有上级可去 */
     sub.appendChild(document.createTextNode(T.placesTitle));
     sub.appendChild(span("browse-note", "　" + T.placesNote));
-    /* 备用入口只在这一屏给。它属于"我想到的地方这里没有"的兜底，
-       放在最外层（位置列表）语义最准，也不会把常用屏的按钮堆满。 */
-    sub.appendChild(miniBtn(T.dialogBtn, pickByDialog));
+    /* 回原生那条路的入口。位置列表是"界面里的最外层"，放在这一屏语义最准：
+       用户在这一屏发现"这里没有我想去的地方"，正好给他一条回原生的路。 */
+    sub.appendChild(miniBtn(T.nativeBtn, pickByNative));
     sub.appendChild(miniBtn(T.backToLib, backToLib));
   } else if (viewing) {
     /* 浏览某个目录：把「在看哪个目录」和「能去哪」都放在状态行上。
@@ -1165,13 +1332,35 @@ function render() {
   act.appendChild(bRe);
 
   /* 主按钮：选中一张图 → 直接换上，一步到位。
-     名字必须直说「选一张图」—— 它原来叫「浏览文件夹…」，用户看了就问
-     「能不能不要全选」。入口语义错了，功能再对也白搭。 */
+     名字这已经是第三次调整，前两次的教训都留在这一段里：
+       ① 最早叫「浏览文件夹…」→ 用户看了就问「能不能不要全选」。
+          入口的粒度是"文件夹"，写多长的说明都补不回来。
+       ② 改名「选一张图…」→ 粒度对了，但没说这张图是从哪来的。
+       ③ 本轮（陛下要求「直接调用 WINDOWS 自带的文件管理器」）→
+          改叫「用资源管理器选…」，并把老控件入口整个删掉。
+     名字必须与**实际打开的那个框**一致：点下去出的是资源管理器的对话框，
+     按钮上就得写"资源管理器"。名字与行为对不上，用户只会以为走错了路。 */
   var bPick = document.createElement("span");
   bPick.className = "btn primary";
-  bPick.appendChild(document.createTextNode(T.pickFolder));
-  bPick.onclick = pickFolder;
+  bPick.appendChild(document.createTextNode(T.nativeBtn));
+  bPick.title = T.nativeTitle;
+  /* 主入口 = 原生对话框。资源管理器那套（缩略图、左侧导航、搜索、最近位置）
+     用户本来就会用，不用再学一套自绘浏览器。原生不可用时 pickByNative 自己会落到
+     pickFolder（界面自带的浏览器），所以这里不需要额外的判断。 */
+  bPick.onclick = pickByNative;
   act.appendChild(bPick);
+
+  /* 第二个入口：界面自带的缩略图网格。
+     为什么还留着它、而且必须给一个**看得见**的按钮：原生那个框给的是"文件"，
+     而"想在界面里成排看缩略图""想一层层逛目录"是另一种需求。
+     更重要的是它是原生那条路的兜底 —— 兜底若只在失败时才冒出来，
+     用户遇到"原生被安全策略拦住"就只剩一句报错可看。
+     两条入口摆在同一个位置，用户随手就能换，不用记哪条在哪。 */
+  var bInUi = document.createElement("span");
+  bInUi.className = "btn ghost";
+  bInUi.appendChild(document.createTextNode(T.inUiBtn));
+  bInUi.onclick = pickFolder;
+  act.appendChild(bInUi);
 }
 
 /*
@@ -1277,8 +1466,9 @@ function selfTest() {
 
     // ---- 「选一张图…」和拖图都靠它们 ----
     // 自检要cover住新路径，否则下次改坏了自己都不知道。
-    // Shell.Application 是「选一张图…」的前提
-    try { new ActiveXObject("Shell.Application"); slog("SHELLAPP=OK"); }
+    /* WScript.Shell 是"拉起外部命令"的前提 —— 原生选图靠它启动 PowerShell。
+       （老的 Shell.Application 已经不用了：它那个选文件夹框没有缩略图。） */
+    try { shl().ExpandEnvironmentStrings("%SystemRoot%"); slog("SHELLAPP=OK"); }
     catch (e6) { slog("SHELLAPP=FAIL"); }
     // 能不能列任意目录的图（不只是壁纸库那一个目录）
     var rootImgs = [];
@@ -1319,14 +1509,31 @@ function selfTest() {
       if (String(sps[pi].className || "").indexOf("btn primary") >= 0) nPick++;
     }
     slog("DOM_PICK_BTN=" + nPick);
+    /* 两条选图入口都必须真的在按钮行里：原生（主）+ 界面自带（兜底）。
+       只留一条的风险：原生被安全策略拦住时，用户手上就没有别的入口了 ——
+       而这正是"兜底"要挡的事。 */
+    var spsB = document.getElementsByTagName("span"), nInUi = 0;
+    for (var ui = 0; ui < spsB.length; ui++) {
+      if (String(spsB[ui].className || "") === "btn ghost" &&
+          String(spsB[ui].innerText || "") === T.inUiBtn) nInUi++;
+    }
+    slog("DOM_INUI_BTN=" + (nInUi === 1 ? 1 : 0));
 
-    /* ---- 「选一张图…」这条路：入口改对了没有 ----
-       主按钮的名字必须真的写着「选一张图…」。它原来叫「浏览文件夹…」，
-       用户看了就问「能不能不要全选」—— 入口语义错了，功能再对也白搭，
-       所以这条按**文案**断言，不按功能断言。
-       （以后改这句话时，记得同步改这里 —— 它故意是硬编码的，
-        就是为了让「有人把入口名字改回去」这件事立刻报出来。） */
-    slog("PICK_BTN_LABEL=" + (T.pickFolder === "选一张图…" ? 1 : 0));
+    /* ---- 主按钮的名字，必须**从 DOM 里读出来**再比 ----
+       这条以前查的是**文案表**（「T.pickFolder === "选一张图…"」）——
+       那是典型的「只查表象不查主体」：**按钮实际渲染成什么它根本不知道**，
+       把 bPick 的文案换成别的，它照样报 1。（同类教训这个项目已经记过两次：
+       查文件名前缀却不查 Attributes 属性位、查"提到"却不查"调用"。）
+       现在改成遍历 DOM，挑出 「btn primary」 那一个，比对它真实显示的文字。
+       判据直接写死这行字而不是查 「T.nativeBtn」 等于什么：
+       文案表自证清白没有意义，要证的是**按钮上真的写着这行字** ——
+       所以文案表和渲染之间任何一环断了，这条都会响。 */
+    var nPickLabel = 0;
+    for (var pl = 0; pl < sps.length; pl++) {
+      if (String(sps[pl].className || "").indexOf("btn primary") >= 0 &&
+          String(sps[pl].innerText || "") === "用资源管理器选…") nPickLabel++;
+    }
+    slog("PICK_BTN_LABEL=" + (nPickLabel === 1 ? 1 : 0));
     /* 判定分支四路全覆盖。pickFolder 本身要弹窗、自检点不了，
        所以把整条路上唯一会分叉的判定抽成了 pickedKind()，这里逐路断言。
        输入全是真实存在的路径：库里的一张图 / 壁纸库目录 / 一个 .mjs 脚本。 */
@@ -1545,7 +1752,63 @@ function selfTest() {
     var subTxt2 = "";
     try { subTxt2 = String(el("sub").innerText || ""); } catch (e11) { }
     slog("PLACES_NO_UP=" + (subTxt2.indexOf(T.up) < 0 ? 1 : 0));
-    slog("PLACES_HAS_DIALOG=" + (subTxt2.indexOf(T.dialogBtn) >= 0 ? 1 : 0));
+    /* ---- 原生选图这条路（本轮换的主入口）----
+       系统对话框不是"都不能用"，而是"老的那个不能用"：BrowseForFolder 背后是
+       XP 的 SHBrowseForFolder，没有缩略图；而资源管理器那一套（Vista+ 的
+       IFileOpenDialog）有缩略图 / 导航窗格 / 搜索。HTA 里拿不到它，PowerShell 能。
+
+       四层门禁，一层都不省：
+         ① 生成出来的 .ps1 **纯 ASCII**（中文一律 base64 解出）——编码坑从根上关掉；
+         ② .ps1 里关键开关都在位（AutoUpgradeEnabled / InitialDirectory / ShowDialog）；
+         ③ .bat 的启动参数在位（-STA / -NoProfile / -ExecutionPolicy Bypass / -File）；
+         ④ **真跑一次探测**：只加载程序集 + 读属性，**不 ShowDialog**。
+            为什么非跑不可："PowerShell 被策略拦了""WinForms 缺了"这两件事，
+            读代码看不出来，而它们都会让主入口点了没反应 —— 门禁不许弹窗，
+            但可以跑一次不弹窗的探测。 */
+    var natTxt = "";
+    try { natTxt = nativePs1Text(); } catch (en0) { natTxt = ""; }
+    var natAscii = (natTxt && !/[^\x00-\x7F]/.test(natTxt)) ? 1 : 0;
+    slog("NATIVE_PS_ASCII=" + natAscii);
+    var natKey = 0;
+    if (natTxt.indexOf("AutoUpgradeEnabled") >= 0 &&
+        natTxt.indexOf("OpenFileDialog") >= 0 &&
+        natTxt.indexOf("InitialDirectory") >= 0 &&
+        natTxt.indexOf("ShowDialog") >= 0 &&
+        natTxt.indexOf("FromBase64String") >= 0) natKey = 1;
+    slog("NATIVE_PS_KEY=" + natKey);
+    var nbTxt = "";
+    try { nbTxt = nativeBatText(); } catch (en1) { nbTxt = ""; }
+    var natBatOk = 0;
+    if (nbTxt.indexOf("-STA") >= 0 && nbTxt.indexOf("-NoProfile") >= 0 &&
+        nbTxt.indexOf("-ExecutionPolicy Bypass") >= 0 && nbTxt.indexOf("-File") >= 0 &&
+        nbTxt.indexOf("picker-native.ps1") >= 0) natBatOk = 1;
+    slog("NATIVE_BAT_OK=" + natBatOk);
+    /* 管道实测：真写一次 .ps1、真跑一次（不弹窗）、真读回结果文件。
+       这一条盖住的是"启动 → 传参 → 文件交接 → 读回"整条链 ——
+       路径里的空格 / 中文、少一个引号、参数个数不对，全都会安静地失败。 */
+    var natPipe = 0;
+    try {
+      try { writeAscii(WIN.natPs1, natTxt); } catch (ep0) { }
+      delIf(WIN.natOut);
+      var rcN = runCmd(nativeProbeCmd());
+      var otxt = readAll(WIN.natOut);
+      if (rcN === 0 && otxt.indexOf("#PROBE#") >= 0 && otxt.indexOf("args=3") >= 0) natPipe = 1;
+    } catch (en3) { natPipe = 0; }
+    slog("NATIVE_PIPE=" + natPipe);
+    var natRun = 0;
+    try {
+      var probe = '"' + psExe() + '" -NoProfile -STA -ExecutionPolicy Bypass -Command ' +
+        '"Add-Type -AssemblyName System.Windows.Forms; ' +
+        "$d = New-Object System.Windows.Forms.OpenFileDialog; " +
+        "Write-Output ('AU=' + $d.AutoUpgradeEnabled); " +
+        "Write-Output ('APART=' + [System.Threading.Thread]::CurrentThread.GetApartmentState())" + '"';
+      var rcP = runCmd(probe);
+      var ptxt = readAll(RUN_TXT);
+      if (rcP === 0 && ptxt.indexOf("AU=True") >= 0 && ptxt.indexOf("APART=STA") >= 0) natRun = 1;
+    } catch (en2) { natRun = 0; }
+    slog("NATIVE_PS_RUN=" + natRun);
+    /* 位置列表屏必须给得出原生入口 —— 从兜底浏览器走回原生，全靠这个按钮。 */
+    slog("PLACES_HAS_NATIVE=" + (subTxt2.indexOf(T.nativeBtn) >= 0 ? 1 : 0));
     browseDir = null;
     render();
     // 结算文案：必须同时说清「收的是哪一张」「壁纸库共几张（旧的一张没动）」「原目录几张未动」。

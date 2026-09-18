@@ -171,7 +171,19 @@ const ES6_TRAPS = [
   [/Array\.from/, "Array.from"],
   [/Object\.assign/, "Object.assign"],
 ];
-const traps = ES6_TRAPS.filter(([re]) => re.test(jsCode)).map(([, n]) => n);
+/* 报出**行号 + 那一行的内容**，不要只报语法名。
+   一开始只报"箭头函数 / 模板字符串"这种名字，真去改的时候还得全文找是哪一处 ——
+   本轮就为了注释里一个反引号多跑了一轮构建（门禁拦住了，但没说拦在哪）。
+   注意 stripComments() 会把注释整段抽掉，所以行号是"代码块内第 N 行"，
+   与模板源码的行号不一一对应 —— 这一点在消息里写明，免得照着行号找错地方。 */
+const traps = [];
+for (const [re, n] of ES6_TRAPS) {
+  const hit = re.exec(jsCode);
+  if (!hit) continue;
+  const idx = jsCode.slice(0, hit.index).split("\n").length;
+  const snippet = jsCode.split("\n")[idx - 1].trim().slice(0, 60);
+  traps.push(`${n} —— 代码块内第 ${idx} 行：${snippet}`);
+}
 if (traps.length) fail("代码块用了 ES5 之外的语法，HTA 的引擎不认", traps);
 
 // 3b-2. ICON 属性 —— 只在 <HTA:APPLICATION ... /> 元素内部取属性，不全文 grep。
@@ -248,19 +260,77 @@ if (undefKeys.length) {
     undefKeys.map((k) => `WIN.${k} —— WIN 对象里没有这个键，运行时会变成 undefined`));
 }
 
-// 3c-2. 反向检查：主入口不许再走系统对话框
-//   这一条的检查方向和其他都相反 —— 它盯的是"某段代码里不该出现什么"。
-//   为什么值得单独加：系统对话框没有缩略图，用户看得见文件名、看不见图，
-//   这正是它被换掉的原因。哪天有人觉得"用系统的更省事"把它改回去，
-//   用户的"看不见图"就会原样复发，而正向断言一条都不会响。
+// 3c-2. 反向检查之一：产物里不许再**调用** BrowseForFolder
+//   这一条的检查方向和其他都相反 —— 它盯的是"不许出现什么"。
+//   上一版只禁了 pickFolder() 函数体内；本轮把范围扩到全产物，因为那个入口
+//   已经从"备用"变成"彻底删掉"了：它是 XP 时代的控件，没有缩略图，
+//   用户看得见文件名、看不见图。留着它就是留着一条"点了看不见图"的路，
+//   而所有正向断言都不会响。
+//
+//   判据为什么是 `BrowseForFolder(` 而不是光看名字：说明文字里难免会提到它
+//   （本产物里就有好几处注释在讲"为什么不用它"），把**提到**也判违规，
+//   门禁就会变成"一句解释都不能写" —— 那是我第一次写这条时的错，
+//   构建当场就报了（注释里提到它也算命中）。真正要拦的是**调用**。
+//   注意别把它和"系统自带对话框"混为一谈：现在的主入口走的是 Vista+ 的通用
+//   对话框（IFileOpenDialog），有缩略图 —— 那才是要留的。
 const fnPick = /function pickFolder\(\) \{([\s\S]*?)\n\}/.exec(out);
-if (!fnPick) fail("产物里找不到 pickFolder，界面上的主按钮会点了没反应");
-if (/BrowseForFolder/.test(fnPick[1])) {
-  fail("「选一张图…」又被改回系统对话框了", [
-    "SHBrowseForFolder 是 XP 时代的控件，没有缩略图 ——",
-    "用户只能看见文件名，看不见图。而挑壁纸恰恰是「看图」的活。",
-    "要恢复系统对话框，请放回备用入口 pickByDialog（位置列表那一屏有它的按钮），",
-    "主入口必须留在界面自己的缩略图网格里。",
+if (!fnPick) fail("产物里找不到 pickFolder，原生不可用时就没有兜底入口了");
+if (/BrowseForFolder\s*\(/.test(out)) {
+  fail("产物里又出现了 BrowseForFolder 的调用（没有缩略图的老控件）", [
+    "它让用户只能看见文件名、看不见图，而挑壁纸恰恰是「看图」的活。",
+    "要「原生交互」请走 pickByNative（PowerShell + Vista+ 通用对话框），",
+    "那条路才有缩略图 / 左侧导航 / 搜索。",
+  ]);
+}
+// 3c-2b. 结构门禁：主按钮必须真的接在原生那条路上
+//   这一轮的全部意义就是"点「选一张图…」出原生框"。只验证 pickByNative 存在
+//   是不够的 —— 它可能写了却没接线，那用户点了还是老路。所以直接盯接线语句。
+if (!/bPick\.onclick\s*=\s*pickByNative;/.test(out)) {
+  fail("主按钮没有接在原生对话框上（bPick.onclick = pickByNative 不见了）", [
+    "pickByNative 可能是写了但没接线，也可能是被换回了其它入口。",
+    "结果都是：用户点主按钮时，看到的不是资源管理器那个框。",
+  ]);
+}
+// 3c-2c. 反向检查之三：主按钮的**名字**也得说原生，还得挂上悬停说明
+//   为什么"接线对了"还不够：陛下这轮的原话是「直接调用 WINDOWS 自带的文件管理器，
+//   原生交互会好一点」。按钮接在原生框上、名字却还写着旧的「选一张图…」，
+//   用户根本看不出这轮改了什么 —— 而"入口名字与实际行为对不上"正是这个项目
+//   前两轮反复踩的坑（叫「浏览文件夹…」时，用户以为要交出一个文件夹）。
+//   这条还顺带挡住一类**运行时空白**：文案键被删/改名、引用却没跟着改，
+//   createTextNode(undefined) 渲染出来是个没有字的按钮 —— 接线在、函数在、
+//   语法也过，所有正向断言都不响，只有这条能拦。本轮就正好是这种改动形态。
+if (!/bPick\.appendChild\(document\.createTextNode\(T\.nativeBtn\)\)/.test(out)) {
+  fail("主按钮的文案不是 T.nativeBtn（按钮上写的名字与实际打开的框对不上）", [
+    "主入口走的是资源管理器的选图框，按钮就必须写着「用资源管理器选…」。",
+    "另一种触发方式：文案键被删/改名后忘了改这一处引用 —— 那会渲染出一个空白按钮。",
+  ]);
+}
+if (!/bPick\.title\s*=\s*T\.nativeTitle;/.test(out)) {
+  fail("主按钮没挂悬停说明（bPick.title = T.nativeTitle 不见了）", [
+    "按钮名字要短（它和「在界面里翻…」并排），细节靠 title 补：挑一张、选完自动换上。",
+  ]);
+}
+// 3c-2d. 废弃的文案键不许再被引用
+//   删键不删引用是**静默**故障：运行时报 undefined，按钮空白、状态行空白，
+//   而构建期三道检查（语法 / ES5 / 关键内容）全绿，谁都看不出来。
+//   判据走 jsCode（**已剥注释**的代码）而不是 out：
+//   注释里当然还要讲这段历史，把"提到"也判违规，就等于"一句解释都不许写" ——
+//   这个项目在这上面已经栽过一次（反向门禁把注释里的 BrowseForFolder 也算命中）。
+if (/T\.pickFolder(Title)?\b/.test(jsCode)) {
+  fail("代码里还在用已删除的文案键 T.pickFolder / T.pickFolderTitle", [
+    "pickFolder 与函数同名（迟早有人改错那一个），pickFolderTitle 从未接到任何控件上。",
+    "主按钮应取 T.nativeBtn，兜底按钮取 T.inUiBtn。",
+  ]);
+}
+// 3c-3. 反向检查之二：原生对话框的核心开关不许被拿掉
+//   为什么单独拦一条：AutoUpgradeEnabled 一变成 false，WinForms 会**静默**退回
+//   Vista 之前的老式对话框 —— 路径照样拿得到、代码照样跑得通，只有"看得见图"
+//   这件事没了。症状与当初的 BrowseForFolder 一模一样，而正向断言全绿，
+//   所以只能靠这里拦。
+if (!/AutoUpgradeEnabled\s*=\s*\$true/.test(out)) {
+  fail("生成的原生对话框脚本里 AutoUpgradeEnabled 不是 $true", [
+    "它一变成 false，WinForms 会静默退回老式对话框：没有缩略图、没有左侧导航，",
+    "用户又回到「只看得见文件名」。这正是本轮要解决的问题，不许退化回去。",
   ]);
 }
 
@@ -391,8 +461,9 @@ if (process.argv.includes("--selftest")) {
     STATE_MISSING: "0",
     STATE_IN_LIST: "1",
     DOM_ON_COUNT: "1",
-    // 主按钮 = 「选一张图…」那条路的闸门。入口语义错了，功能再对也白搭，
-    // 所以这里既断文案、也断判定分支的四种输入。
+    // 主按钮的闸门。这条断的是**按钮上真实显示的文字**（自检从 DOM 里读出来），
+    // 不是"文案表里某个键等于什么" —— 后者只是表象，按钮渲染成别的它也不知道。
+    // 另外四条断判定分支的四种输入。
     PICK_BTN_LABEL: "1",
     PICK_KIND_FILE: "1",
     PICK_KIND_DIR: "1",
@@ -404,11 +475,13 @@ if (process.argv.includes("--selftest")) {
     SETTLE_OK: "1",
     SETTLE_NODIR_TAIL_OK: "1",
     PARENT_DIR: "1",
-    /* ---- 「选一张图…」= 界面自带的图片浏览器（本轮换的主路径）----
-       换它的原因：系统对话框（SHBrowseForFolder）是 XP 时代的控件，没有缩略图，
-       用户看得见文件名、看不见图。这条路能成立的前提是四件事：列得出目录、
-       列得出盘符、上得去、起点记得住。每件一条断言。
-       （这些断言原先只在 HTA 里跑、没有进这张表 —— 等于没有门禁。） */
+    /* ---- 「在界面里翻…」= 界面自带的图片浏览器（现在是**兜底**，不再是主路径）----
+       它的来历：当年系统对话框只有 SHBrowseForFolder（XP 控件，没有缩略图），
+       用户看得见文件名、看不见图，于是自绘了一个图片浏览器顶上。
+       本轮主入口换成了 Vista+ 的通用对话框（IFileOpenDialog，有缩略图），
+       这条路退成兜底 —— 但**绝不能删**：原生那条路被安全策略拦住时，
+       它是用户手上唯一还选得成图的入口。
+       它成立的前提是四件事：列得出目录、列得出盘符、上得去、起点记得住。每件一条断言。 */
     DIRS_HAS_TOOLS: "1",
     DIRS_NO_JUNK: "1",
     DRIVES_OK: "1",
@@ -417,7 +490,21 @@ if (process.argv.includes("--selftest")) {
     PLACES_CARDS_EQ: "1",
     PLACES_PATH_OK: "1",
     PLACES_NO_UP: "1",
-    PLACES_HAS_DIALOG: "1",
+    /* 原生选图这条路（本轮换的主入口）。系统对话框不是"都不能用"，
+       而是"老的那个不能用" —— BrowseForFolder 背后是 XP 的 SHBrowseForFolder，
+       没有缩略图；资源管理器那一套（Vista+ 的 IFileOpenDialog）有。
+       这四条盯住：产物纯 ASCII、开关在位、启动参数在位、真跑得起来。 */
+    PLACES_HAS_NATIVE: "1",
+    NATIVE_PS_ASCII: "1",
+    NATIVE_PS_KEY: "1",
+    NATIVE_BAT_OK: "1",
+    NATIVE_PS_RUN: "1",
+    /* 管道实测：启动 → 传参 → 结果文件 → 读回。这一条盖住的是"安静失败"：
+       路径里的空格 / 中文、少一个引号、参数个数不对 —— 全都不报错，
+       只会拿不到结果，界面上表现为"点了没反应"。 */
+    NATIVE_PIPE: "1",
+    /* 两条选图入口都得在按钮行里：原生（主）+ 界面自带（兜底）。 */
+    DOM_INUI_BTN: "1",
     UP_MIDDLE: "1",
     UP_TO_DRIVE: "1",
     UP_AT_ROOT: "1",
@@ -427,11 +514,11 @@ if (process.argv.includes("--selftest")) {
     /* 起点记忆的另外三条。它们盯的不是"能不能记住"，而是"记的东西对不对" ——
        LAST_DIR_ROUNDTRIP 原先拿 WIN.lib 做往返、还把"能记住壁纸库"写成必须通过，
        等于用门禁保证了 bug 的存在：跳进壁纸库目录看到的图和壁纸库视图一模一样，
-       用户点完「选一张图…」只会觉得按钮坏了。现在四条各归各位。 */
+       用户点完主按钮只会觉得按钮坏了。现在四条各归各位。 */
     LAST_DIR_SKIPS_LIB: "1",
     LAST_DIR_CJK: "1",
     LAST_DIR_SELFHEAL: "1",
-    /* 「选一张图…」点下去必须真的换视图。两条：浏览态点 → 回位置列表；
+    /* 兜底入口（「在界面里翻…」）点下去必须真的换视图。两条：浏览态点 → 回位置列表；
        起点被写脏时点 → 也不能跳回壁纸库目录。 */
     PICK_IN_BROWSE_TO_LIST: "1",
     PICK_FROM_LIB_SKIPS_LIB: "1",
@@ -464,11 +551,11 @@ if (process.argv.includes("--selftest")) {
   const nPlTh = Number(get("PLACES_DTHUMB"));
   if (!(nPlCard >= 1)) problems.push(`PLACES_CARDS=${get("PLACES_CARDS")}，位置列表一张卡片都没画出来（第一屏会是空的）`);
   if (nPlCard !== nPlTh) problems.push(`位置卡片 ${nPlCard} 张，但文件夹图形只有 ${nPlTh} 个 —— 有卡片没画出中间那块缩略图位`);
-  /* 点「选一张图…」之后那一屏的卡片数，必须与直接渲染位置列表时一致 ——
+  /* 点兜底入口（「在界面里翻…」）之后那一屏的卡片数，必须与直接渲染位置列表时一致 ——
      不一致说明按钮走的不是同一条渲染路径，用户会看到一屏对不上的东西。 */
   const nPickCard = Number(get("PICK_CARDS_IN_LIST"));
-  if (!(nPickCard >= 1)) problems.push(`PICK_CARDS_IN_LIST=${get("PICK_CARDS_IN_LIST")}，点「选一张图…」之后一张卡片都没画出来`);
-  if (nPickCard !== nPlCard) problems.push(`点「选一张图…」后是 ${nPickCard} 张卡片，直接渲染位置列表是 ${nPlCard} 张 —— 两条路渲染结果不一致`);
+  if (!(nPickCard >= 1)) problems.push(`PICK_CARDS_IN_LIST=${get("PICK_CARDS_IN_LIST")}，点兜底入口之后一张卡片都没画出来`);
+  if (nPickCard !== nPlCard) problems.push(`点兜底入口后是 ${nPickCard} 张卡片，直接渲染位置列表是 ${nPlCard} 张 —— 两条路渲染结果不一致`);
 
   console.log("");
   if (problems.length) fail("自检未通过", problems);
