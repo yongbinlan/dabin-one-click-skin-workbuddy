@@ -1,0 +1,35 @@
+name: publish-check
+
+# 这个仓库有两个特点，让「人肉检查」必然漏，所以把判断交给脚本在 CI 里跑：
+#
+#   1. 编码与行尾是**产物正确性**的一部分，不是风格问题 —— 而它们只在字节层可见。
+#      中文看着完全正常，`.cmd` 缺 0x0D 也看不出来，clone 下来双击才炸。
+#   2. 文档里写着一堆**数字**（N 项自检、N 个文件）与一堆**外链**，
+#      会随代码/上游漂移，而没有任何东西会因此报错。
+#
+# 只跑 ubuntu：scripts/check-publish.mjs 是纯字节与文本比对，
+# 配合 `.gitattributes` 的 `* -text`（关掉一切行尾转换）在任何平台上结果相同。
+# 真正需要 Windows 的那部分（启动器回归、编码实测、界面自检）在
+# template/tools/verify-launcher.mjs 里，它要一台装了 WorkBuddy 的机器，不适合进 CI。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 发布前自检
+        run: node scripts/check-publish.mjs

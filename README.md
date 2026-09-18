@@ -1,10 +1,14 @@
 # WorkBuddy 一键换肤
 
-给 [WorkBuddy](https://www.workbuddy.cn)（腾讯 CodeBuddy 桌面端）装上一套自己的皮肤，
-并让它**每次开机自动回来**。
+给 [WorkBuddy](https://www.workbuddy.cn)（腾讯 CodeBuddy 桌面端）换一层皮肤，
+并且让它**重启之后还在**。
 
-装一次，之后所有操作都是**双击** —— 换壁纸、调透出强度、看状态、还原原生。
-不需要懂命令行，不需要装依赖，**不改 `app.asar`**。
+官方不存在常驻主题的钩子 —— 注入只活在渲染进程内存里，重启必丢。
+本项目用「替换启动入口 + 启动后注入一次即退」解决它：
+**零常驻进程、零轮询、不改 `app.asar`**。
+
+安装要一行命令（前置：Node ≥ 22.4、CodeDrobe CLI）；装完之后日常操作全是双击 ——
+换壁纸、调透出强度、看状态、还原原生。
 
 ![皮肤整体效果](docs/skin-overview.jpg)
 
@@ -23,7 +27,7 @@
 | **跨机器** | 工程里没有一处写死绝对路径，整体搬走仍然可用 |
 | **故障边界** | 皮肤层任何环节坏掉，最坏结果只是「没皮肤」，不影响 WorkBuddy 可用性 |
 
-上游主题引擎是成熟开源项目 **CodeDrobe Theme**（Apache-2.0）。
+上游主题引擎是成熟开源项目 **CodeDrobe Core**（[CodeDrobe/core](https://github.com/CodeDrobe/core)，Apache-2.0）。
 本工程负责的是**工程化与常驻层**：把「注入一次、重启就没了」变成「装一次、以后一直在」。
 
 ---
@@ -253,10 +257,17 @@ reference-image 流程。
 
 ## 出处与许可
 
-- 主题引擎：[**CodeDrobe Theme**](https://github.com/codedrobe)（Apache-2.0）
+Copyright 2026 蓝晟硕（大硕）。本仓库以 [Apache-2.0](LICENSE) 授权。
+
+- 主题引擎：[**CodeDrobe Core**](https://github.com/CodeDrobe/core) v0.6.1（Apache-2.0）
+  —— 是**运行期依赖**，需自行安装（见「前置条件」），本仓库不含其源码
 - 本仓库：工程化与常驻层（启动器、壁纸选择器、主题打包、路径探测、自检、排障）
-- 随附主题「夜街」的素材与配色为本项目自制；`template\themes\` 下由 CodeDrobe 派生的
-  样式文件遵循其上游许可
+- 随附主题「夜街」的素材与配色为本项目自制，含 `assets/hero.webp`。
+  `template\themes\` 下的样式由本项目的 `heige-codex-skin-studio` 生成，
+  **不是**从上游派生的文件 —— 只是沿用了它的 CSS 变量名与类名
+  （`.cr-theme` / `--cr-*` / `--codedrobe-image-hero`）以完成互操作
+
+许可见 [`LICENSE`](LICENSE)（Apache-2.0）与 [`NOTICE`](NOTICE)（出处与商标声明）。
 
 更多设计取舍、踩过的坑与对照实验，见 [`template\README.md`](template/README.md)
 与 [`SKILL.md`](SKILL.md)。

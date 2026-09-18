@@ -277,6 +277,76 @@ if (!USE_WORKTREE) {
     hm("有 LICENSE 但没有 NOTICE —— 若上游要求保留署名声明，需要补");
 }
 
+// ---------- 7) 文档里引用的 GitHub 仓库 / 账号是否真的存在 ----------
+// 治一次真实事故：文档里把上游地址写成 `https://github.com/codedrobe`。
+// 这类错字**页面渲染完全正常**，只有真去点才会发现；
+// 更糟的是它会被复制到别处（那次就扩散到了 skill 索引与另一份参考表）。
+//
+// **必须同时管两种写法**：`github.com/<org>/<repo>`（两段）和
+// `github.com/<org>`（一段，裸组织名）。第一版只写了前者，
+// 于是正好漏掉本次那个真实故障 —— 一段式恰恰更阴险，
+// 因为它连"到底指到哪个仓库"都没写清楚。
+//
+// 关于那次事故，有一条**我一开始判断错了、后来实测纠正**的细节，记在这里
+// 免得后人重蹈：`codedrobe` 这个组织**是真实存在的**（`users/codedrobe`
+// 返回 200），所以它**不是 404**，而是"可达但没指到该指的东西" ——
+// 上游仓库是 `CodeDrobe/core`，不是 `codedrobe`。顺带记两条 GitHub 行为：
+//   - 大小写不敏感：`repos/codedrobe/core` 与 `repos/CodeDrobe/core` 都是 200，
+//     只是后者才是人类可读的规范写法；
+//   - 因此"404 才是错"这个判据太窄 —— 一段式裸组织名要单独判，见下方 bare。
+//
+// 要联网，所以拿不到网络时**跳过而非判失败** —— 别把离线环境变成假红灯。
+{
+  const LINK = /https:\/\/github\.com\/([A-Za-z0-9_.-]+)(?:\/([A-Za-z0-9_.-]+))?/g;
+  // GitHub 自己的功能路径，不是用户/组织
+  const NOT_USER = new Set(["orgs", "features", "about", "settings", "sponsors",
+                            "marketplace", "topics", "collections", "apps", "contact",
+                            "login", "join", "pricing", "explore", "trending", "new",
+                            "codespaces", "enterprise", "security", "site", "readme"]);
+  const found = new Map();   // "users/x" 或 "repos/x/y" -> ["文件:行", ...]
+  const why = new Map();
+  const bare = new Set();    // 一段式（裸组织名）—— 单独判，见下方
+  for (const rel of tracked) {
+    if (isBinary(rel)) continue;
+    const text = readText(rel).text;
+    if (text === null) continue;
+    // 代码文件里跳过注释行 —— 与第 4 项同一条规矩，理由也相同：
+    // 本文件开头那段注释**正是在举例说明这个坏链接**，不跳过的话
+    // 它会变成一条永久噪音（`codedrobe（只有组织名…）`），而噪音会掩盖真正的红灯。
+    const isCode = /\.(mjs|js|ts|json|css|ya?ml)$/i.test(rel);
+    text.split(/\r?\n/).forEach((line, i) => {
+      if (isCode && /^\s*(\/\/|\/\*|\*|#|<!--)/.test(line)) return;
+      for (const m of line.matchAll(LINK)) {
+        if (NOT_USER.has(m[1].toLowerCase())) continue;
+        const api = m[2] ? `repos/${m[1]}/${m[2]}` : `users/${m[1]}`;
+        const shown = m[2] ? `${m[1]}/${m[2]}` : `${m[1]}（只有组织名，没指到具体仓库）`;
+        if (!found.has(api)) { found.set(api, []); why.set(api, shown); }
+        found.get(api).push(`${rel}:${i + 1}`);
+        if (!m[2]) bare.add(why.get(api));
+      }
+    });
+  }
+
+  const dead = [], unknown = [];
+  for (const [api, wheres] of found) {
+    try {
+      const res = await fetch(`https://api.github.com/${api}`, {
+        headers: { "User-Agent": "check-publish", Accept: "application/vnd.github+json" },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (res.status === 200) continue;
+      if (res.status === 404) { dead.push(`${why.get(api)}（${wheres[0]}）`); continue; }
+      unknown.push(why.get(api));   // 403 限流 / 5xx —— 判不了，不冤枉它
+    } catch { unknown.push(why.get(api)); }
+  }
+
+  if (found.size === 0) hm("文档里没有 GitHub 链接");
+  else if (dead.length) no(`文档引用的 GitHub 目标不存在（点进去 404）：${dead.join(" / ")}`);
+  else if (bare.size) hm(`文档里有只写到组织名的链接（能打开，但落到组织首页，读者找不到具体仓库）：${[...bare].join(" / ")}`);
+  else if (unknown.length) hm(`外链可达性未完全确认（限流或离线）：${unknown.join(" / ")}`);
+  else ok(`文档引用的 ${found.size} 个 GitHub 目标均可达且指到了具体仓库（${[...why.values()].join(" / ")}）`);
+}
+
 console.log("\n================ 结果 ================");
 console.log(`通过 ${pass.length} ｜ 警告 ${warn.length} ｜ 失败 ${fail.length}`);
 if (fail.length) {

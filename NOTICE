@@ -1,7 +1,9 @@
 dabin-one-click-skin-workbuddy（WorkBuddy 一键换肤）
-Copyright 2026 蓝晟硕
+Copyright 2026 蓝晟硕（大硕）
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
+本仓库除下列「上游作品」外，全部内容（代码、主题样式、配色、素材）的著作权
+归 蓝晟硕（大硕）所有。
 
 --------------------------------------------------------------------------
 上游作品与出处
@@ -23,9 +25,12 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
     with those companies.
 
 --------------------------------------------------------------------------
-本仓库自有部分
+本仓库自有部分（著作权归 蓝晟硕／大硕）
 --------------------------------------------------------------------------
-- scripts/init.mjs、template/（launcher、tools、themes）
+- scripts/init.mjs、scripts/check-publish.mjs、template/（launcher、tools、themes）
+- 随附主题「夜街 · 白吊带」的全部素材，含
+  template/themes/night-street/assets/hero.webp（1920×1078）——
+  为本项目自制，非取自任何第三方素材库
 - template/themes/ 下的主题样式由本项目 heige-codex-skin-studio 生成，
   设计令牌（--heige-*）与配色为本项目自有
 - 其中沿用了 CodeDrobe 主题系统的 CSS 变量与类名
