@@ -58,11 +58,14 @@ node <本skill目录>\scripts\init.mjs --dest D:\my\workbuddy-skin
 它会依次做完这些事，每一步都打印做了什么：
 
 1. **探测本机环境** —— node、WorkBuddy 主程序、CodeDrobe CLI
-2. **展开工程** —— 把 `template/` 铺到目标目录（36 个文件，已剔除本机专属项）
+2. **展开工程** —— 把 `template/` 铺到目标目录（37 个文件，已剔除本机专属项）
 3. **生成 `launcher\env.cmd`** —— 本机路径落在这一份文件里
 4. **构建壁纸选择器** —— 生成 `launcher\壁纸选择器.hta`（纯 ASCII 产物）
 5. **构建主题包** —— `build\<主题id>-<版本>.codedrobe-theme`
 6. **装一张默认壁纸** —— 壁纸库空时用主题自带的 hero 图打底，避免开箱是一片空白
+7. **给壁纸选择器配一个带图标的入口** —— 在 `launcher\` 里生成 `壁纸选择器.lnk`
+   （`.hta` 的文件图标由 Windows 的**扩展名关联**决定，与文件内容无关，详见 §7.10.1。
+   这一步失败不致命：没有快捷方式时双击 `.hta` 一切照旧，只是图标是系统默认的）
 
 参数：
 
@@ -91,7 +94,7 @@ node <工程>\tools\verify-launcher.mjs
 | 想做什么 | 双击什么 |
 |---|---|
 | **注入皮肤**（第一次装完必做，WorkBuddy 要在运行） | `launcher\注入皮肤.cmd` |
-| **换壁纸**（有缩略图，最直观） | `launcher\壁纸选择器.hta` |
+| **换壁纸**（有缩略图，最直观） | `launcher\壁纸选择器.lnk`（带项目图标）｜`.hta` 是同目录的程序本体，双击一样能用 |
 | 换壁纸（命令行列表） | `launcher\换壁纸.cmd`（也支持把图片**拖到它上面**） |
 | 调壁纸透出强度 | `launcher\调强度.cmd`（淡 / 中 / 浓） |
 | 看当前状态 | `launcher\查看状态.cmd` |
@@ -304,12 +307,93 @@ ICON 属性的排查经过（都不是猜的）：
 
 | 做法 | 效果 | 代价 |
 |---|---|---|
-| 建一个指向 `.hta` 的 `.lnk`，设 `IconLocation` | 文件夹里那个入口有图标 | 与 `.hta` 同名，隐藏扩展名时看着像重复项；要么把 `.hta` 设为隐藏 |
-| 改 `HKCU\Software\Classes\htafile\DefaultIcon` | 本机**所有** `.hta` 都换图标 | 影响面超出本工程，属于越权，**必须用户明确要求才做** |
+| 建一个指向 `.hta` 的 `.lnk`，设 `IconLocation` | 文件夹里那个入口有图标 | 与 `.hta` 同名，隐藏扩展名时看着像重复项。**分发场景已采用**，见 7.10.3 |
+| 改 `HKCU\Software\Classes\htafile\DefaultIcon` | 本机**所有** `.hta` 都换图标 | 影响面须**先实测**再定，判据见下方 ④ |
 | `launcher\desktop.ini` + `[.ShellClassInfo] IconResource` | 给**目录**换图标 | 不解决单个文件；`desktop.ini` 要设隐藏+系统属性 |
 
 补充：`.ico` 里**至少要有 DIB 条目**，只有 PNG 条目的 ICO 在老 GDI 路径上读不出来
 （虽然本例里 mshta 是彻底不读，但快捷方式那条路仍在用老路径，别只放 PNG）。
+
+#### 7.10.2 改 `htafile` 关联：从"越权红线"改成可实测的三步（2026-09-18 落地）
+
+原先写的是「必须用户明确要求才做」。这条**在实践中不可执行**：用户真实的问法是
+「这个图标怎么没更新」，既不是授权也不是拒绝，照字面读就只能干看着。
+影响面其实是**可以量出来的**，于是改成：
+
+- **① 先测影响面，再决定要不要问。** 全盘清点本机 `.hta`。若**全部**属于本工程
+  （产物 / 模板 / 日志 / 备份），影响面 = 0，不构成越权；只要存在**一个**第三方 `.hta`，
+  就必须先取得显式同意。清点命令用受管 Python 遍历，别靠印象。
+  （实测本机 8 个 `.hta` 全属本套件 → 影响面 0。）
+- **② 只写 HKCU，永不碰 HKLM。** `HKCU\Software\Classes` 与 `HKLM\Software\Classes` 是
+  **按键级合并**：只加 `htafile\DefaultIcon` 子键，`shell\open\command` 等仍回落 HKLM。
+  **动手后必须回读 `HKCR\htafile\shell\open\command` 确认仍指向 mshta** —— 这是回归项，
+  漏了就可能出现"图标好看了但双击打不开"。
+- **③ 留档 + 可回滚 + 事后告知。** 原值写进 rollback json；`--rollback` 删键即复原
+  （HKCU 键不存在时系统自动回落 HKLM 默认值）；完成后发
+  `SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, 0, 0)`，再按需刷图标缓存。
+  **做完立刻告知用户**，并给出回滚方式 —— 不告知才是真正的越权。
+
+**探测链（照读，别猜）**：
+
+```
+.hta → HKLM\Software\Classes\.hta = "htafile"
+     → HKLM\Software\Classes\htafile\DefaultIcon = "C:\Windows\System32\mshta.exe,1"
+     → HKCU 侧通常空白 → Explorer 只能退回 mshta 的图标
+```
+
+**验证方式（关键：别拿注册表自述当证据）**。注册表只说明"写了什么"，Explorer 显示什么
+要问 Shell 的图像解析链：
+
+- `SHGetFileInfoW` + `SHGFI_ICONLOCATION` **取证不到来源** —— 缓存命中时它只回一个
+  系统图像列表索引（实测回 `iIcon=974`、`szDisplayName` 为空）。别在这条路上耗时间。
+- 硬办法：`SHGetFileInfoW` + `SHGFI_ICON` 拿 `HICON` → `DrawIconEx` 画进 DIB section
+  → `string_at` 读像素 → 与 `.ico` 自身渲染**逐像素比差**。同源判据：平均差 < 12（实测 1.6）。
+  用 `CreateDIBSection` 的 `biHeight = -size` 拿自上而下位图，省一次翻转。
+- **`.lnk` 要先 `ole32.CoInitialize(None)`**，否则 `SHGetFileInfoW` 直接返回 0，
+  看着像"文件不存在"（本坑实测踩过）。
+
+**附带结论（省一次决策）**：`.lnk` 不设 `IconLocation` 时会**继承目标图标**。所以改
+`htafile` 一处，三个入口一起变 —— 实测 `launcher\壁纸选择器.hta` 1.6、
+`tools\picker.template.hta` 1.6、桌面 `壁纸选择器.hta.lnk` 1.8。这也是为什么
+本机方案优先选它：**一个动作覆盖全部入口**，不必再造 `.lnk`。
+
+**本机工具**（换肤工程之外的一次性脚本，不随套件分发）：
+`set-hta-icon.py`（挂载 / `--rollback` 复原 / `--status` 查看）、
+`probe-hta-icon.py`（HICON 取证 + 对照图）、
+`refresh-icon-cache.py`（通知 + 刷新缓存 + 复验）。
+
+#### 7.10.3 分发场景：部署时自动补一个带图标的入口（2026-09-18 落地）
+
+**别人机器上不能照搬本机方案** —— `.hta` 分布未知，改关联就是越权。
+所以分发走 `.lnk` 外壳路（7.10.1 表格第一条）。
+
+为什么不干脆往套件里放一个 `.lnk`：`.lnk` 里存的是**绝对路径**，换台机器就失效 ——
+正是套件铁律「产物不含绝对路径」要挡的东西。所以只能**部署时生成**。
+
+落在 `scripts/init.mjs` 第 7 步：构建完 `.hta` 后调 `tools/_make-picker-entry.ps1`。
+
+| 位置 | 触发条件 | 理由 |
+|---|---|---|
+| `launcher\壁纸选择器.lnk` | **默认**（每次 init 都建） | 建在工程自己的目录里，不是用户的桌面，故无需征询 |
+| 桌面 `壁纸选择器.lnk` | 只跟 `--shortcut` | 这会动用户的桌面 → 按套件既有原则须显式授权 |
+
+脚本实现上有三个要点：
+
+- **快捷方式名从 `.hta` 文件名派生**（`$hta.BaseName + ".lnk"`）—— `.ps1` 必须纯 ASCII，
+  中文名不能硬编码，只能运行时从文件系统读（rules/04 §3 的老规矩）
+- `IconLocation` 指向 `launcher\picker.ico,0`；**保存后回读** `IconLocation` / `TargetPath` /
+  `Arguments` 三项并打印，而不是信自己刚赋的值 —— `Save()` 静默丢 `IconLocation`
+  正是这个脚本存在的理由
+- 带 `-Into <目录>` 参数，好让测试落在临时目录、**不碰用户真实桌面**
+
+**验收判据**（别信脚本自述）：Shell 取的图标与 `picker.ico` 逐像素比差 < 12。
+实测走完整 init → `launcher\壁纸选择器.lnk` 差 **1.8**，且 `SHGFI_ICONLOCATION` 直接报出
+`...\launcher\picker.ico`（显式指定 IconLocation 时 Shell 给出真实来源；继承来的图标
+只会回一个系统图像列表索引）。
+
+**踩过的坑**：`SHGetFileInfoW` 对**正斜杠**路径（`E:/a/b.lnk`）静默失败，而
+`os.path.exists` 照样返回 `True` —— 表现为"文件存在但图标取不到"，白查一轮。
+从命令行收路径一律 `os.path.normpath(os.path.abspath(p))`。
 
 ### 7.11 清理类操作的三铁律
 

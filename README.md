@@ -48,7 +48,7 @@ rem 3. 注入皮肤（WorkBuddy 需要在运行）
 **让皮肤每次开机自动回来**：把桌面 / 开始菜单的 WorkBuddy 快捷方式指向
 `launcher\workbuddy-skin-launcher.vbs`。原来的快捷方式会自动备份到 `backup\`，随时可还原。
 
-> 初始化脚本会依次：探测本机路径 → 展开工程 → 生成 `env.cmd` → 生成壁纸选择器
+> 初始化脚本会依次：探测本机路径 → 展开工程 → 生成 `env.cmd` → 生成壁纸选择器（含带图标的入口）
 > → 构建并打包主题 → 装一张默认壁纸。每一步都打印做了什么、跳过了什么。
 >
 > 主程序装在非标准路径也能识别；识别不到就加 `--app "C:\...\WorkBuddy.exe"` 指定一次。
@@ -76,7 +76,7 @@ rem 3. 注入皮肤（WorkBuddy 需要在运行）
 | 想做什么 | 双击什么 | 也可以 |
 |---|---|---|
 | 注入皮肤（装完必做一次） | `launcher\注入皮肤.cmd` | `node tools\launcher.mjs` |
-| **换壁纸**（有缩略图） | `launcher\壁纸选择器.hta` | — |
+| **换壁纸**（有缩略图） | `launcher\壁纸选择器.lnk`（带图标） | `launcher\壁纸选择器.hta` 是程序本体，双击亦可 |
 | 换壁纸（列表版） | `launcher\换壁纸.cmd` | 把图片**拖到它图标上** → 收进库并立刻启用 |
 | 调壁纸透出强度 | `launcher\调强度.cmd` | 按 1/2/3 选淡 / 中 / 浓 |
 | 看当前状态 | `launcher\查看状态.cmd` | `node tools\set-wallpaper.mjs list` |
@@ -90,7 +90,7 @@ rem 3. 注入皮肤（WorkBuddy 需要在运行）
 
 ## 壁纸选择器
 
-换壁纸最直观的方式：双击 `launcher\壁纸选择器.hta`。
+换壁纸最直观的方式：双击 `launcher\壁纸选择器.lnk`（部署时自动生成，带项目图标）。
 
 | 壁纸库视图 | 「浏览文件夹」之后的视图 |
 |---|---|
@@ -165,7 +165,7 @@ WorkBuddy 的 `supportsControlChannel` 与 CodeDrobe 的 `host.supported` **都�
 ├── SKILL.md                  ← 给 AI Agent 读的操作手册（人类也能看）
 ├── scripts\
 │   └── init.mjs              ← 一键初始化：展开工程 + 探测本机 + 生成产物
-├── template\                 ← 展开到用户机器上的工程模板（36 个文件）
+├── template\                 ← 展开到用户机器上的工程模板（37 个文件）
 │   ├── launcher\             ← 用户唯一需要接触的目录（全部双击）
 │   ├── tools\                ← 全部脚本
 │   ├── themes\               ← 主题源（改配色改这里）
@@ -179,7 +179,7 @@ WorkBuddy 的 `supportsControlChannel` 与 CodeDrobe 的 `host.supported` **都�
 ```
 <工程根>\
 ├── launcher\     注入皮肤.cmd / 换壁纸.cmd / 调强度.cmd / 查看状态.cmd / 还原原生.cmd
-│                 壁纸选择器.hta（生成物）  workbuddy-skin-launcher.vbs  env.cmd（生成物）
+│                 壁纸选择器.lnk（生成物·带图标）+ 壁纸选择器.hta（程序本体）  workbuddy-skin-launcher.vbs  env.cmd（生成物）
 ├── tools\        全部脚本
 ├── themes\<主题>\ 主题源 + assets
 ├── build\        主题包产物

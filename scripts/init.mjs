@@ -12,6 +12,8 @@
  *   node scripts/init.mjs --app "C:\...\WorkBuddy.exe"
  *                                              手工指定主程序（探测不到时用）
  *   node scripts/init.mjs --shortcut           顺手建桌面快捷方式
+ *                                              （含带图标的壁纸选择器入口；
+ *                                               launcher 里那份是默认就建的）
  *   node scripts/init.mjs --force              目标已存在时也继续（只补缺，不覆盖）
  *   node scripts/init.mjs --upgrade            把已有工程的 tools/ 与 launcher/
  *                                              刷成这个 skill 的新版（主题、壁纸、
@@ -22,7 +24,8 @@
  *   · 幂等：重复跑只补齐缺失的东西，绝不覆盖用户已经改过的文件
  *   · 单点实现：主程序/node 的探测只有 write-env.mjs 一份，本脚本不重复造
  *   · 不静默：每一步都打印做了什么、跳过了什么、为什么
- *   · 不越权：绝不动用户的快捷方式，除非显式给 --shortcut
+ *   · 不越权：绝不动用户的桌面，除非显式给 --shortcut。建在工程自己目录里的
+ *     入口（launcher\壁纸选择器.lnk）不在此列 —— 那是本工程的产物，不是用户的。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -289,6 +292,39 @@ if (libImages.length === 0 && THEME_DIR) {
   }
 }
 
+// ------------------------------------------------- 壁纸选择器入口（带图标）
+// 为什么需要这一步：.hta 在资源管理器里显示什么图标，由 Windows 的**扩展名关联**
+// （HKCR\htafile\DefaultIcon = mshta.exe）决定，跟文件里写什么完全无关 ——
+// <HTA:APPLICATION ICON="..."> 只管运行时的窗口/任务栏，Win10 的 mshta 连那个都不理
+// （见 SKILL.md 7.10.1 的 WM_GETICON 实测）。Windows 没有「单文件图标」机制，
+// 所以能带上项目图标的只有外壳这一条路：一个设了 IconLocation 的快捷方式。
+//
+// 这一份建在 launcher 目录里（工程的目录，不是用户的桌面），所以不必征询；
+// 桌面那一份仍然只在显式给 --shortcut 时才建，不越权。
+{
+  const launcherDir = path.join(DEST, "launcher");
+  const ps1 = path.join(DEST, "tools", "_make-picker-entry.ps1");
+  let hta = "";
+  try { hta = fs.readdirSync(launcherDir).filter((f) => /\.hta$/i.test(f))[0] || ""; } catch { /* 没目录 */ }
+
+  if (!fs.existsSync(ps1)) {
+    console.log("【壁纸选择器入口】跳过：找不到 tools/_make-picker-entry.ps1");
+    console.log();
+  } else if (!hta) {
+    console.log("【壁纸选择器入口】跳过：launcher 里没有 .hta 产物");
+    console.log();
+  } else {
+    console.log("【壁纸选择器入口】给 launcher 里的 " + hta + " 配一个带图标的快捷方式");
+    const r = spawnSync("powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, "-Into", launcherDir],
+      { encoding: "utf8", windowsHide: true });
+    process.stdout.write(((r.stdout || "") + (r.stderr || "")).replace(/^/gm, "  "));
+    // 失败不算致命：没有快捷方式时双击 .hta 一切照旧，只是图标是系统默认的。
+    if (r.status !== 0) console.log("  ⚠️ 退出码 " + r.status + "（不影响功能，双击 .hta 仍可用）");
+    console.log();
+  }
+}
+
 // ---------------------------------------------------------------- 快捷方式（可选）
 if (WANT_SHORTCUT) {
   const ps1 = path.join(DEST, "tools", "_make-shortcuts.ps1");
@@ -297,6 +333,18 @@ if (WANT_SHORTCUT) {
     const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1];
     if (APP) args.push("-Exe", APP);
     const r = spawnSync("powershell.exe", args, { encoding: "utf8", windowsHide: true });
+    process.stdout.write(((r.stdout || "") + (r.stderr || "")).replace(/^/gm, "  "));
+    console.log();
+  }
+
+  // 桌面也来一份「壁纸选择器」入口 —— 用户换壁纸是从桌面点，不是翻进工程目录点。
+  // 这会动用户的桌面，所以只跟在显式 --shortcut 后面，不默认执行。
+  const pickerPs1 = path.join(DEST, "tools", "_make-picker-entry.ps1");
+  if (fs.existsSync(pickerPs1)) {
+    console.log("【壁纸选择器入口（桌面）】");
+    const r = spawnSync("powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", pickerPs1],
+      { encoding: "utf8", windowsHide: true });
     process.stdout.write(((r.stdout || "") + (r.stderr || "")).replace(/^/gm, "  "));
     console.log();
   }
